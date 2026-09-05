@@ -28,17 +28,17 @@ export const SpeakerNotesDrawer: React.FC<SpeakerNotesDrawerProps> = ({
   return (
     <div
       id="speaker-notes-drawer"
-      className="fixed bottom-16 right-4 md:right-8 z-50 w-[92vw] max-w-lg bg-white/95 backdrop-blur-xl border border-[#E5E9E6] rounded-3xl shadow-2xl overflow-hidden transition-all text-[#2C2C2C]"
+      className="fixed inset-x-3 bottom-16 sm:inset-x-auto sm:right-6 sm:bottom-20 z-50 sm:w-[480px] max-h-[72vh] flex flex-col bg-white/95 backdrop-blur-xl border border-[#E5E9E6] rounded-3xl shadow-2xl overflow-hidden transition-all text-[#2C2C2C]"
     >
       {/* Header */}
-      <div className="bg-[#F4F7F5] px-5 py-3.5 border-b border-[#E5E9E6] flex items-center justify-between">
+      <div className="bg-[#F4F7F5] px-4 sm:px-5 py-3 border-b border-[#E5E9E6] flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
-          <div className="w-2.5 h-2.5 rounded-full bg-[#3A6351] animate-ping" />
+          <div className="w-2.5 h-2.5 rounded-full bg-[#3A6351]" />
           <span className="text-xs font-bold uppercase tracking-wider text-[#3A6351] font-sans">
             Notas da Palestrante
           </span>
           <span className="text-xs text-gray-400 font-sans">
-            (Tela {currentSlide} / {totalSlides})
+            ({currentSlide} / {totalSlides})
           </span>
         </div>
 
@@ -47,7 +47,7 @@ export const SpeakerNotesDrawer: React.FC<SpeakerNotesDrawerProps> = ({
             id="notes-prev-btn"
             onClick={onPrev}
             disabled={currentSlide === 1}
-            className="p-1 rounded-full text-gray-400 hover:text-[#3A6351] hover:bg-white disabled:opacity-30"
+            className="p-1 rounded-full text-gray-400 hover:text-[#3A6351] hover:bg-white disabled:opacity-30 cursor-pointer"
             title="Tela anterior"
           >
             <ChevronUp className="w-4 h-4" />
@@ -56,7 +56,7 @@ export const SpeakerNotesDrawer: React.FC<SpeakerNotesDrawerProps> = ({
             id="notes-next-btn"
             onClick={onNext}
             disabled={currentSlide === totalSlides}
-            className="p-1 rounded-full text-gray-400 hover:text-[#3A6351] hover:bg-white disabled:opacity-30"
+            className="p-1 rounded-full text-gray-400 hover:text-[#3A6351] hover:bg-white disabled:opacity-30 cursor-pointer"
             title="Próxima tela"
           >
             <ChevronDown className="w-4 h-4" />
@@ -64,7 +64,7 @@ export const SpeakerNotesDrawer: React.FC<SpeakerNotesDrawerProps> = ({
           <button
             id="notes-close-btn"
             onClick={onClose}
-            className="p-1 rounded-full text-gray-400 hover:text-[#3A6351] hover:bg-white ml-1"
+            className="p-1 rounded-full text-gray-400 hover:text-[#3A6351] hover:bg-white ml-1 cursor-pointer"
             title="Fechar notas (N)"
           >
             <X className="w-4 h-4" />
@@ -73,7 +73,7 @@ export const SpeakerNotesDrawer: React.FC<SpeakerNotesDrawerProps> = ({
       </div>
 
       {/* Body with scroll */}
-      <div className="p-5 max-h-[60vh] overflow-y-auto space-y-3.5 text-sm">
+      <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-3.5 text-sm">
         {/* Title */}
         <div className="text-xs font-semibold text-gray-400 border-b border-gray-100 pb-2 font-serif">
           {slideTitle}

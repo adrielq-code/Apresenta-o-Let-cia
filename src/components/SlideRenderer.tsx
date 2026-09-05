@@ -72,7 +72,7 @@ export const SlideRenderer: React.FC<SlideRendererProps> = ({
   };
 
   return (
-    <div className="w-full h-full flex flex-col justify-center items-center px-6 md:px-12 py-6 relative overflow-hidden select-none">
+    <div className="w-full min-h-full flex flex-col justify-start sm:justify-center items-center px-3 sm:px-8 md:px-12 pt-3 sm:pt-6 pb-28 sm:pb-24 relative select-none overflow-y-auto overflow-x-hidden">
       <AnimatePresence mode="wait">
         <motion.div
           key={slide.id}
@@ -80,7 +80,7 @@ export const SlideRenderer: React.FC<SlideRendererProps> = ({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 1.02, y: -8 }}
           transition={{ duration: 0.35, ease: 'easeOut' }}
-          className="w-full h-full max-w-6xl flex flex-col justify-center items-center my-auto"
+          className="w-full max-w-6xl flex flex-col justify-start sm:justify-center items-center my-auto py-2 sm:py-4"
         >
           {/* ==================== TELA 01 — ABERTURA ==================== */}
           {slide.id === 1 && (
@@ -89,25 +89,25 @@ export const SlideRenderer: React.FC<SlideRendererProps> = ({
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
-                className="inline-flex items-center gap-2 px-5 py-1.5 rounded-full bg-[#F4F7F5] border border-[#3A6351]/20 text-[#3A6351] text-xs font-bold uppercase tracking-[0.25em] mb-6 shadow-sm font-sans"
+                className="inline-flex items-center gap-2 px-4 sm:px-5 py-1.5 rounded-full bg-[#F4F7F5] border border-[#3A6351]/20 text-[#3A6351] text-[11px] sm:text-xs font-bold uppercase tracking-[0.25em] mb-4 sm:mb-6 shadow-sm font-sans"
               >
                 <Sparkles className="w-3.5 h-3.5 text-[#3A6351]" />
                 Palestra Inspiracional • Ensino Médio
               </motion.div>
 
-              <h1 className="text-5xl sm:text-7xl md:text-8xl font-serif font-bold text-[#2C2C2C] tracking-tight leading-[1.06]">
+              <h1 className="text-4xl sm:text-7xl md:text-8xl font-serif font-bold text-[#2C2C2C] tracking-tight leading-[1.06]">
                 ESCOLHENDO<br />MEU FUTURO
               </h1>
 
-              <h2 className="text-xl sm:text-2xl md:text-3xl text-gray-500 font-serif italic font-normal mt-3 mb-2">
+              <h2 className="text-lg sm:text-2xl md:text-3xl text-gray-500 font-serif italic font-normal mt-2 sm:mt-3 mb-2">
                 Da Farmácia ao empreendedorismo na Estética
               </h2>
 
-              <div className="my-8 p-6 sm:p-8 bg-white border border-[#E5E9E6] rounded-3xl shadow-xl shadow-[#3A6351]/5 max-w-2xl">
-                <p className="text-xl sm:text-2xl md:text-3xl font-serif italic text-gray-700 leading-snug">
+              <div className="my-5 sm:my-8 p-5 sm:p-8 bg-white border border-[#E5E9E6] rounded-3xl shadow-xl shadow-[#3A6351]/5 max-w-2xl">
+                <p className="text-lg sm:text-2xl md:text-3xl font-serif italic text-gray-700 leading-snug">
                   “Você já sabe o que quer ser quando crescer?”
                 </p>
-                <span className="block text-xs font-sans text-gray-400 mt-3 uppercase tracking-wider">
+                <span className="block text-[11px] sm:text-xs font-sans text-gray-400 mt-2 sm:mt-3 uppercase tracking-wider">
                   Uma reflexão sincera para quem tem 15, 16 ou 17 anos
                 </span>
               </div>
@@ -117,17 +117,18 @@ export const SlideRenderer: React.FC<SlideRendererProps> = ({
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={onNextSlide}
-                className="pill-btn px-10 py-4 rounded-full bg-[#3A6351] hover:bg-[#2e5041] text-white font-bold text-xs tracking-widest shadow-xl shadow-[#3A6351]/25 flex items-center gap-3 transition-all uppercase cursor-pointer"
+                className="pill-btn px-8 sm:px-10 py-3.5 sm:py-4 rounded-full bg-[#3A6351] hover:bg-[#2e5041] text-white font-bold text-xs tracking-widest shadow-xl shadow-[#3A6351]/25 flex items-center gap-3 transition-all uppercase cursor-pointer"
               >
                 <span>COMEÇAR PALESTRA</span>
                 <ArrowRight className="w-4 h-4 stroke-[2.5]" />
               </motion.button>
 
-              <div className="mt-6 flex items-center gap-2 text-xs text-gray-400 font-sans">
-                <span>Dica: Use as teclas</span>
-                <kbd className="px-2 py-0.5 bg-gray-100 rounded text-gray-600 border border-gray-200">←</kbd>
-                <kbd className="px-2 py-0.5 bg-gray-100 rounded text-gray-600 border border-gray-200">→</kbd>
-                <span>para navegar</span>
+              <div className="mt-5 flex items-center gap-2 text-xs text-gray-400 font-sans">
+                <span className="hidden sm:inline">Dica: Use as teclas</span>
+                <span className="sm:hidden">Dica: Deslize para o lado ou use</span>
+                <kbd className="hidden sm:inline-block px-2 py-0.5 bg-gray-100 rounded text-gray-600 border border-gray-200">←</kbd>
+                <kbd className="hidden sm:inline-block px-2 py-0.5 bg-gray-100 rounded text-gray-600 border border-gray-200">→</kbd>
+                <span>os botões abaixo</span>
               </div>
             </div>
           )}
@@ -135,19 +136,19 @@ export const SlideRenderer: React.FC<SlideRendererProps> = ({
           {/* ==================== TELA 02 — INTERAÇÃO ==================== */}
           {slide.id === 2 && (
             <div className="flex flex-col items-center text-center w-full max-w-5xl">
-              <span className="text-[11px] font-bold tracking-[0.25em] text-[#3A6351] uppercase mb-3 font-sans">
+              <span className="text-[10px] sm:text-[11px] font-bold tracking-[0.25em] text-[#3A6351] uppercase mb-2 sm:mb-3 font-sans">
                 Dinâmica de Abertura
               </span>
 
-              <h2 className="text-4xl sm:text-5xl md:text-6xl font-serif italic font-bold text-[#2C2C2C] tracking-tight leading-tight max-w-3xl">
+              <h2 className="text-3xl sm:text-5xl md:text-6xl font-serif italic font-bold text-[#2C2C2C] tracking-tight leading-tight max-w-3xl">
                 Quem aqui já sabe o que quer ser?
               </h2>
 
-              <p className="text-gray-500 text-sm sm:text-base mt-3 mb-10 font-sans">
+              <p className="text-gray-500 text-xs sm:text-base mt-2 sm:mt-3 mb-6 sm:mb-8 font-sans">
                 Vote na opção que mais representa o seu momento hoje ou levante a mão:
               </p>
 
-              <div className="flex flex-wrap justify-center gap-6 sm:gap-8 w-full max-w-4xl">
+              <div className="flex flex-col sm:flex-row flex-wrap justify-center items-center gap-3 sm:gap-6 w-full max-w-4xl">
                 {[
                   {
                     id: 'ja_sei',
@@ -174,13 +175,13 @@ export const SlideRenderer: React.FC<SlideRendererProps> = ({
                       key={opt.id}
                       id={`vote-opt-${opt.id}`}
                       onClick={() => setSelectedOption(opt.id)}
-                      className={`pill-btn w-48 sm:w-56 h-48 sm:h-56 rounded-3xl border-2 flex flex-col items-center justify-center gap-3 transition-all cursor-pointer relative shadow-sm ${
+                      className={`pill-btn w-full max-w-[280px] sm:w-52 md:w-56 h-auto py-5 sm:h-56 rounded-3xl border-2 flex flex-col items-center justify-center gap-2.5 sm:gap-3 transition-all cursor-pointer relative shadow-sm ${
                         isChosen
                           ? 'border-[#3A6351] bg-[#3A6351] text-white shadow-xl shadow-[#3A6351]/20'
                           : 'border-[#3A6351]/80 text-[#3A6351] bg-white hover:bg-[#F4F7F5]'
                       }`}
                     >
-                      <span className="text-4xl sm:text-5xl">{opt.emoji}</span>
+                      <span className="text-3xl sm:text-5xl">{opt.emoji}</span>
                       <span className="font-bold text-xs sm:text-sm tracking-widest uppercase font-sans">
                         {opt.label}
                       </span>
@@ -189,7 +190,7 @@ export const SlideRenderer: React.FC<SlideRendererProps> = ({
                       </span>
 
                       {isChosen && (
-                        <div className="absolute top-3 right-3 w-6 h-6 rounded-full bg-white text-[#3A6351] flex items-center justify-center">
+                        <div className="absolute top-3 right-3 w-6 h-6 rounded-full bg-white text-[#3A6351] flex items-center justify-center shadow-sm">
                           <Check className="w-3.5 h-3.5 stroke-[3]" />
                         </div>
                       )}
@@ -202,7 +203,7 @@ export const SlideRenderer: React.FC<SlideRendererProps> = ({
                 <motion.p
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="mt-8 text-[#3A6351] text-xs sm:text-sm font-semibold bg-[#F4F7F5] px-5 py-2.5 rounded-full border border-[#3A6351]/20 font-sans"
+                  className="mt-6 sm:mt-8 text-[#3A6351] text-xs sm:text-sm font-semibold bg-[#F4F7F5] px-4 sm:px-5 py-2.5 rounded-full border border-[#3A6351]/20 font-sans max-w-lg"
                 >
                   💡 Perfeito! Fiquem tranquilos: a maioria absoluta das pessoas está no segundo ou terceiro grupo.
                 </motion.p>
@@ -213,11 +214,11 @@ export const SlideRenderer: React.FC<SlideRendererProps> = ({
           {/* ==================== TELA 03 — PRESSÃO ==================== */}
           {slide.id === 3 && (
             <div className="flex flex-col items-center text-center max-w-4xl">
-              <h4 className="text-4xl sm:text-6xl font-serif mb-4 italic text-[#2C2C2C]">
+              <h4 className="text-3xl sm:text-5xl md:text-6xl font-serif mb-2 sm:mb-4 italic text-[#2C2C2C]">
                 “Eu tenho 17 anos...”
               </h4>
 
-              <h1 className="text-2xl sm:text-4xl font-light mb-4 text-gray-600 font-sans">
+              <h1 className="text-xl sm:text-3xl md:text-4xl font-light mb-2 sm:mb-4 text-gray-600 font-sans">
                 Preciso saber o que vou fazer pelo resto da vida?
               </h1>
 
@@ -225,10 +226,10 @@ export const SlideRenderer: React.FC<SlideRendererProps> = ({
               <motion.div
                 initial={{ opacity: 0, scale: 0.7 }}
                 animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.5, type: 'spring', stiffness: 220 }}
-                className="my-2"
+                transition={{ delay: 0.4, type: 'spring', stiffness: 220 }}
+                className="my-1 sm:my-2"
               >
-                <div className="text-[120px] sm:text-[160px] md:text-[200px] font-serif font-bold text-[#E63946] leading-none select-none tracking-tight">
+                <div className="text-7xl sm:text-[140px] md:text-[190px] font-serif font-bold text-[#E63946] leading-none select-none tracking-tight">
                   NÃO.
                 </div>
               </motion.div>
@@ -236,13 +237,13 @@ export const SlideRenderer: React.FC<SlideRendererProps> = ({
               <motion.div
                 initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.9 }}
-                className="p-6 bg-white border border-[#E5E9E6] rounded-3xl max-w-xl shadow-xl shadow-[#3A6351]/5"
+                transition={{ delay: 0.8 }}
+                className="p-5 sm:p-6 bg-white border border-[#E5E9E6] rounded-3xl max-w-xl shadow-xl shadow-[#3A6351]/5 mt-2"
               >
-                <p className="text-lg sm:text-xl text-gray-600 font-serif italic leading-relaxed">
+                <p className="text-base sm:text-xl text-gray-700 font-serif italic leading-relaxed">
                   “Escolher uma profissão não significa decidir toda a sua vida hoje.”
                 </p>
-                <p className="text-xs text-gray-400 mt-2 font-sans uppercase tracking-wider">
+                <p className="text-[11px] sm:text-xs text-gray-400 mt-2 font-sans uppercase tracking-wider">
                   Significa apenas escolher onde você vai começar a construir sua bagagem.
                 </p>
               </motion.div>
@@ -252,12 +253,12 @@ export const SlideRenderer: React.FC<SlideRendererProps> = ({
           {/* ==================== TELA 04 — A HISTÓRIA DA PALESTRANTE ==================== */}
           {slide.id === 4 && (
             <div className="flex flex-col w-full max-w-6xl">
-              <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-4 gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-3 sm:mb-4 gap-2">
                 <div>
                   <span className="text-[10px] font-bold text-[#3A6351] uppercase tracking-[0.2em] font-sans">
                     Trajetória Real
                   </span>
-                  <h2 className="text-3xl sm:text-4xl font-serif text-[#2C2C2C] tracking-tight">
+                  <h2 className="text-2xl sm:text-4xl font-serif text-[#2C2C2C] tracking-tight">
                     Eu também já estive aqui...
                   </h2>
                   <p className="text-xs sm:text-sm text-gray-500 font-sans mt-0.5">
@@ -268,15 +269,15 @@ export const SlideRenderer: React.FC<SlideRendererProps> = ({
                 <button
                   id="slide-4-config-btn"
                   onClick={onOpenConfig}
-                  className="px-4 py-2 rounded-full bg-[#F4F7F5] hover:bg-[#EAF0EC] text-[#3A6351] text-xs font-bold border border-[#3A6351]/20 flex items-center gap-1.5 self-start sm:self-auto shrink-0 transition-colors uppercase tracking-wider font-sans"
+                  className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-full bg-[#F4F7F5] hover:bg-[#EAF0EC] text-[#3A6351] text-xs font-bold border border-[#3A6351]/20 flex items-center gap-1.5 self-start sm:self-auto shrink-0 transition-colors uppercase tracking-wider font-sans cursor-pointer"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>Personalizar Fotos</span>
                 </button>
               </div>
 
-              {/* Horizontal Timeline Bar */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 w-full my-3">
+              {/* Responsive Timeline Bar with horizontal scroll on mobile */}
+              <div className="flex sm:grid sm:grid-cols-4 lg:grid-cols-8 overflow-x-auto gap-2 w-full my-2 sm:my-3 pb-2 scrollbar-none snap-x">
                 {TIMELINE_MILESTONES.map((m) => {
                   const isActive = activeMilestoneId === m.id;
                   const photoUrl =
@@ -288,20 +289,20 @@ export const SlideRenderer: React.FC<SlideRendererProps> = ({
                       key={m.id}
                       id={`milestone-step-${m.id}`}
                       onClick={() => setActiveMilestoneId(m.id)}
-                      className={`p-2.5 rounded-2xl border text-left flex flex-col transition-all cursor-pointer group ${
+                      className={`shrink-0 w-28 sm:w-auto p-2 sm:p-2.5 rounded-2xl border text-left flex flex-col transition-all cursor-pointer group snap-start ${
                         isActive
                           ? 'bg-[#F4F7F5] border-[#3A6351] shadow-lg shadow-[#3A6351]/10 scale-[1.02]'
                           : 'bg-white border-[#E5E9E6] hover:border-gray-300'
                       }`}
                     >
-                      <div className="aspect-square w-full rounded-xl overflow-hidden mb-2 bg-gray-100 relative">
+                      <div className="aspect-square w-full rounded-xl overflow-hidden mb-1.5 bg-gray-100 relative">
                         <img
                           src={photoUrl}
                           alt={m.label}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           referrerPolicy="no-referrer"
                         />
-                        <span className={`absolute top-1.5 left-1.5 w-5 h-5 rounded-md text-[10px] font-sans font-bold flex items-center justify-center ${
+                        <span className={`absolute top-1 left-1 w-4 h-4 sm:w-5 sm:h-5 rounded-md text-[9px] sm:text-[10px] font-sans font-bold flex items-center justify-center ${
                           isActive ? 'bg-[#3A6351] text-white' : 'bg-white/90 text-gray-700'
                         }`}>
                           {m.stepNumber}
@@ -309,13 +310,13 @@ export const SlideRenderer: React.FC<SlideRendererProps> = ({
                       </div>
 
                       <span
-                        className={`text-xs font-bold truncate font-sans ${
+                        className={`text-[11px] sm:text-xs font-bold truncate font-sans ${
                           isActive ? 'text-[#3A6351]' : 'text-gray-800'
                         }`}
                       >
                         {m.label}
                       </span>
-                      <span className="text-[10px] text-gray-400 truncate font-sans">
+                      <span className="text-[9px] sm:text-[10px] text-gray-400 truncate font-sans">
                         {m.subtitle}
                       </span>
                     </button>

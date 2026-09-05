@@ -8,7 +8,7 @@ import { SpeakerNotesDrawer } from './components/SpeakerNotesDrawer';
 import { PresenterCockpitModal } from './components/PresenterCockpitModal';
 import { SlideDrawer } from './components/SlideDrawer';
 import { ConfigModal } from './components/ConfigModal';
-import { Sparkles, Play, MonitorPlay } from 'lucide-react';
+import { Sparkles, Play, MonitorPlay, Settings, List, StickyNote } from 'lucide-react';
 
 export default function App() {
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
@@ -21,8 +21,32 @@ export default function App() {
   const [speakerConfig, setSpeakerConfig] = useState<SpeakerConfig>(loadSpeakerConfig);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
 
   const currentSlide = SLIDES_DATA[currentSlideIndex];
+
+  // Touch gesture listeners for mobile swipe navigation
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null || touchStartY.current === null) return;
+    const deltaX = e.changedTouches[0].clientX - touchStartX.current;
+    const deltaY = e.changedTouches[0].clientY - touchStartY.current;
+
+    if (Math.abs(deltaX) > 45 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+      if (deltaX < 0) {
+        handleNext();
+      } else {
+        handlePrev();
+      }
+    }
+    touchStartX.current = null;
+    touchStartY.current = null;
+  };
 
   // Slide navigation handlers
   const handleNext = useCallback(() => {
@@ -146,7 +170,7 @@ export default function App() {
   return (
     <div
       ref={containerRef}
-      className="w-screen h-screen bg-[#FDFDFD] text-[#2C2C2C] flex flex-col items-center justify-between relative overflow-hidden font-sans select-none"
+      className="w-full h-full min-h-[100dvh] bg-[#FDFDFD] text-[#2C2C2C] flex flex-col items-center justify-between relative font-sans select-none overflow-x-hidden"
     >
       {/* Background soft artistic ambient lighting */}
       <div className="absolute top-10 left-10 w-96 h-96 bg-[#3A6351]/5 rounded-full blur-3xl pointer-events-none" />
@@ -154,35 +178,35 @@ export default function App() {
 
       {/* Start Splash Screen if not yet started */}
       {!isPresentationStarted ? (
-        <div className="w-full h-full flex flex-col items-center justify-center text-center p-6 z-20 max-w-4xl relative my-auto">
-          <div className="inline-flex items-center gap-2 px-5 py-1.5 rounded-full bg-[#F4F7F5] border border-[#3A6351]/20 text-[#3A6351] text-xs font-bold tracking-[0.25em] uppercase mb-6 shadow-sm">
+        <div className="w-full min-h-full flex flex-col items-center justify-start sm:justify-center text-center p-4 sm:p-6 z-20 max-w-4xl relative overflow-y-auto my-auto py-6 sm:py-8">
+          <div className="inline-flex items-center gap-2 px-4 sm:px-5 py-1.5 rounded-full bg-[#F4F7F5] border border-[#3A6351]/20 text-[#3A6351] text-[11px] sm:text-xs font-bold tracking-[0.25em] uppercase mb-4 sm:mb-6 shadow-sm">
             <Sparkles className="w-3.5 h-3.5 text-[#3A6351]" />
             Palestra Inspiracional • Ensino Médio
           </div>
 
-          <h1 className="text-5xl sm:text-7xl md:text-8xl font-serif font-bold text-[#2C2C2C] tracking-tight leading-[1.08]">
+          <h1 className="text-4xl sm:text-7xl md:text-8xl font-serif font-bold text-[#2C2C2C] tracking-tight leading-[1.08]">
             ESCOLHENDO<br />MEU FUTURO
           </h1>
 
-          <h2 className="text-xl sm:text-2xl md:text-3xl text-gray-500 font-serif italic font-normal mt-4 mb-2">
+          <h2 className="text-lg sm:text-2xl md:text-3xl text-gray-500 font-serif italic font-normal mt-2 sm:mt-4 mb-2">
             Da Farmácia ao empreendedorismo na Estética
           </h2>
 
-          <div className="my-8 p-6 sm:p-8 bg-white border border-[#E5E9E6] rounded-3xl max-w-xl shadow-xl shadow-[#3A6351]/5">
-            <p className="text-base sm:text-lg text-gray-600 leading-relaxed font-serif italic">
+          <div className="my-5 sm:my-8 p-5 sm:p-8 bg-white border border-[#E5E9E6] rounded-3xl max-w-xl shadow-xl shadow-[#3A6351]/5">
+            <p className="text-sm sm:text-lg text-gray-600 leading-relaxed font-serif italic">
               “Você não precisa ter sua vida inteira planejada aos 17 anos. Mas precisa começar a descobrir quem você é, o que gosta, no que é bom e quais caminhos existem.”
             </p>
-            <div className="mt-5 pt-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-400 font-sans uppercase tracking-wider">
+            <div className="mt-4 sm:mt-5 pt-3 sm:pt-4 border-t border-gray-100 flex items-center justify-between text-[11px] sm:text-xs text-gray-400 font-sans uppercase tracking-wider">
               <span>Palestrante: <strong className="text-[#3A6351]">{speakerConfig.speakerName}</strong></span>
               <span>Duração: <strong>~45-50 min</strong></span>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center gap-4">
+          <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4 w-full sm:w-auto px-4 sm:px-0">
             <button
               id="splash-start-lecture-btn"
               onClick={handleStartPresentation}
-              className="pill-btn px-10 py-4 rounded-full bg-[#3A6351] hover:bg-[#2e5041] text-white font-bold text-xs tracking-widest uppercase shadow-xl shadow-[#3A6351]/25 flex items-center gap-3 transition-all cursor-pointer"
+              className="pill-btn w-full sm:w-auto px-8 sm:px-10 py-3.5 sm:py-4 rounded-full bg-[#3A6351] hover:bg-[#2e5041] text-white font-bold text-xs tracking-widest uppercase shadow-xl shadow-[#3A6351]/25 flex items-center justify-center gap-3 transition-all cursor-pointer"
             >
               <Play className="w-4 h-4 fill-current" />
               <span>COMEÇAR PALESTRA</span>
@@ -194,31 +218,31 @@ export default function App() {
                 setIsPresentationStarted(true);
                 setIsCockpitOpen(true);
               }}
-              className="pill-btn px-6 py-3.5 rounded-full bg-white hover:bg-[#F4F7F5] text-gray-700 text-xs font-bold uppercase tracking-wider border border-gray-200 flex items-center gap-2 transition-all shadow-sm cursor-pointer"
+              className="pill-btn w-full sm:w-auto px-6 py-3 sm:py-3.5 rounded-full bg-white hover:bg-[#F4F7F5] text-gray-700 text-xs font-bold uppercase tracking-wider border border-gray-200 flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer"
             >
               <MonitorPlay className="w-4 h-4 text-[#3A6351]" />
               <span>Modo Apresentador</span>
             </button>
           </div>
 
-          <div className="mt-10 text-[11px] text-gray-400 tracking-wider uppercase font-medium flex items-center gap-4">
+          <div className="mt-6 sm:mt-10 text-[10px] sm:text-[11px] text-gray-400 tracking-wider uppercase font-medium flex items-center justify-center gap-3 sm:gap-4 flex-wrap">
             <span>24 telas narrativas</span>
             <span>•</span>
             <span>Notas para a palestrante</span>
             <span>•</span>
-            <span>Layout 16:9</span>
+            <span>Layout responsivo</span>
           </div>
         </div>
       ) : (
-        /* Active Presentation Stage with Header and 16:9 Stage */
-        <div className="w-full h-full flex flex-col justify-between items-center relative overflow-hidden">
-          {/* Elegant Artistic Header */}
-          <header className="w-full h-12 border-b border-gray-100/90 flex items-center justify-between px-6 sm:px-10 bg-white/80 backdrop-blur-md z-30 shrink-0">
-            <div className="flex items-center gap-4">
-              <span className="text-[10px] tracking-[0.2em] font-bold text-gray-400 uppercase font-sans">
+        /* Active Presentation Stage with Header and Responsive Stage */
+        <div className="w-full flex-1 flex flex-col justify-between items-center relative overflow-hidden h-[100dvh]">
+          {/* Header with Quick Navigation & Settings Shortcuts */}
+          <header className="w-full h-12 border-b border-gray-100/90 flex items-center justify-between px-3 sm:px-8 bg-white/90 backdrop-blur-md z-30 shrink-0">
+            <div className="flex items-center gap-2 sm:gap-4">
+              <span className="text-[10px] tracking-[0.2em] font-bold text-gray-400 uppercase font-sans truncate max-w-[120px] sm:max-w-none">
                 ESCOLHENDO MEU FUTURO
               </span>
-              <div className="hidden sm:block h-1 w-36 md:w-56 bg-gray-100 rounded-full overflow-hidden">
+              <div className="hidden sm:block h-1 w-28 md:w-56 bg-gray-100 rounded-full overflow-hidden">
                 <div
                   id="header-progress-bar"
                   className="h-full bg-[#3A6351] transition-all duration-300 rounded-full"
@@ -227,15 +251,52 @@ export default function App() {
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <span className="text-[10px] tracking-[0.15em] font-bold text-gray-400 font-sans uppercase">
+            {/* Header Right Actions: Quick Access on Mobile & Desktop */}
+            <div className="flex items-center gap-1.5 sm:gap-3">
+              <button
+                id="header-slides-drawer-btn"
+                onClick={() => setIsDrawerOpen(true)}
+                className="sm:hidden p-2 rounded-xl text-gray-500 hover:text-[#3A6351] hover:bg-[#F4F7F5] transition-colors cursor-pointer"
+                title="Lista de Telas"
+                aria-label="Abrir lista de telas"
+              >
+                <List className="w-4 h-4" />
+              </button>
+
+              <button
+                id="header-notes-btn"
+                onClick={() => setIsNotesOpen((prev) => !prev)}
+                className={`sm:hidden p-2 rounded-xl transition-colors cursor-pointer ${
+                  isNotesOpen ? 'bg-[#3A6351] text-white' : 'text-gray-500 hover:text-[#3A6351] hover:bg-[#F4F7F5]'
+                }`}
+                title="Roteiro / Notas"
+                aria-label="Abrir roteiro"
+              >
+                <StickyNote className="w-4 h-4" />
+              </button>
+
+              <button
+                id="header-config-btn"
+                onClick={() => setIsConfigOpen(true)}
+                className="sm:hidden p-2 rounded-xl text-gray-500 hover:text-[#3A6351] hover:bg-[#F4F7F5] transition-colors cursor-pointer"
+                title="Ajustes da Palestrante"
+                aria-label="Ajustes e personalização"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+
+              <span className="text-[10px] tracking-[0.15em] font-bold text-gray-400 font-sans uppercase pl-1 sm:pl-0">
                 Tela <span className="text-[#3A6351] font-bold text-xs">{currentSlideIndex + 1}</span> / {SLIDES_DATA.length}
               </span>
             </div>
           </header>
 
-          {/* Main Slide Presentation Stage */}
-          <main className="w-full flex-1 flex items-center justify-center pb-16 overflow-hidden">
+          {/* Main Slide Presentation Stage with Touch Swipe Support */}
+          <main
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+            className="w-full flex-1 flex items-stretch justify-center relative overflow-hidden"
+          >
             <SlideRenderer
               slide={currentSlide}
               config={speakerConfig}
