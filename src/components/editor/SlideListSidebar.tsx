@@ -15,6 +15,7 @@ interface Props {
   activeSlideIndex: number;
   onSelectSlide: (index: number) => void;
   onAddSlide: () => void;
+  onOpenCreateWithAI?: () => void;
   onDuplicateSlide: (index: number) => void;
   onDeleteSlide: (index: number) => void;
   onMoveSlideUp: (index: number) => void;
@@ -26,6 +27,7 @@ export const SlideListSidebar: React.FC<Props> = ({
   activeSlideIndex,
   onSelectSlide,
   onAddSlide,
+  onOpenCreateWithAI,
   onDuplicateSlide,
   onDeleteSlide,
   onMoveSlideUp,
@@ -34,20 +36,34 @@ export const SlideListSidebar: React.FC<Props> = ({
   return (
     <aside className="w-56 sm:w-64 bg-white border-r border-gray-200 flex flex-col h-full shrink-0 select-none">
       {/* Header */}
-      <div className="p-3.5 border-b border-gray-100 flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs font-bold text-gray-700 uppercase tracking-wider">
-          <Layers className="w-3.5 h-3.5 text-[#3A6351]" />
-          <span>Slides ({slides.length})</span>
+      <div className="p-3.5 border-b border-gray-100 space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs font-bold text-gray-700 uppercase tracking-wider">
+            <Layers className="w-3.5 h-3.5 text-[#3A6351]" />
+            <span>Slides ({slides.length})</span>
+          </div>
+
+          <button
+            onClick={onAddSlide}
+            className="p-1.5 px-2.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
+            title="Adicionar slide em branco"
+          >
+            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+            <span className="text-[10px] uppercase tracking-wider font-sans">Novo</span>
+          </button>
         </div>
 
-        <button
-          onClick={onAddSlide}
-          className="p-1.5 rounded-lg bg-[#3A6351] hover:bg-[#2e5041] text-white text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer shadow-xs"
-          title="Adicionar novo slide"
-        >
-          <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-          <span className="text-[10px] uppercase tracking-wider font-sans">Novo</span>
-        </button>
+        {onOpenCreateWithAI && (
+          <button
+            id="create-slide-with-ai-btn"
+            onClick={onOpenCreateWithAI}
+            className="w-full py-1.5 px-2.5 rounded-xl bg-gradient-to-r from-[#3A6351] to-[#244234] hover:from-[#2e5041] hover:to-[#1a3025] text-white text-[11px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+            title="Criar novo slide gerado por IA"
+          >
+            <Sparkles className="w-3 h-3 text-[#E3B04B]" />
+            <span>+ Criar com IA</span>
+          </button>
+        )}
       </div>
 
       {/* Slide Cards List */}

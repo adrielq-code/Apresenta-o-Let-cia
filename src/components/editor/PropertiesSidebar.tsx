@@ -29,6 +29,8 @@ import {
   RotateCw,
   Sparkles,
   Upload,
+  Lock,
+  Unlock,
 } from 'lucide-react';
 
 interface Props {
@@ -255,6 +257,21 @@ export const PropertiesSidebar: React.FC<Props> = ({
                   </span>
 
                   <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => onUpdateElement(selectedElement.id, { locked: !selectedElement.locked })}
+                      className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                        selectedElement.locked
+                          ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                          : 'hover:bg-gray-100 text-gray-500 hover:text-gray-900'
+                      }`}
+                      title={
+                        selectedElement.locked
+                          ? 'Elemento bloqueado (protegido contra edições da IA e arraste)'
+                          : 'Bloquear elemento (proteger da IA)'
+                      }
+                    >
+                      {selectedElement.locked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+                    </button>
                     <button
                       onClick={() => onDuplicateElement(selectedElement.id)}
                       className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-900 transition-colors"

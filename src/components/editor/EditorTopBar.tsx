@@ -13,6 +13,8 @@ import {
   Edit2,
 } from 'lucide-react';
 
+import { AIButton } from './ai/AIButton';
+
 interface Props {
   title: string;
   onTitleChange: (newTitle: string) => void;
@@ -21,11 +23,15 @@ interface Props {
   onRedo: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  undoCommandName?: string;
+  redoCommandName?: string;
   autosaveStatus: 'saving' | 'saved' | 'idle';
   onManualSave: () => void;
   onSaveAsTemplate: () => void;
   onGenerateCode: () => void;
   onPresent: () => void;
+  isAIPanelOpen?: boolean;
+  onToggleAIPanel?: () => void;
 }
 
 export const EditorTopBar: React.FC<Props> = ({
@@ -36,11 +42,15 @@ export const EditorTopBar: React.FC<Props> = ({
   onRedo,
   canUndo,
   canRedo,
+  undoCommandName,
+  redoCommandName,
   autosaveStatus,
   onManualSave,
   onSaveAsTemplate,
   onGenerateCode,
   onPresent,
+  isAIPanelOpen = false,
+  onToggleAIPanel,
 }) => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [tempTitle, setTempTitle] = useState(title);
@@ -102,13 +112,13 @@ export const EditorTopBar: React.FC<Props> = ({
       </div>
 
       {/* Center: Undo / Redo & Autosave Indicator */}
-      <div className="hidden lg:flex items-center gap-3">
-        <div className="flex items-center gap-1 bg-gray-100/80 p-1 rounded-xl">
+      <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-0.5 sm:gap-1 bg-gray-100/80 p-1 rounded-xl">
           <button
             onClick={onUndo}
             disabled={!canUndo}
             className="p-1.5 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-white disabled:opacity-30 transition-all cursor-pointer"
-            title="Desfazer (Ctrl+Z)"
+            title={undoCommandName ? `Desfazer: ${undoCommandName} (Ctrl+Z)` : 'Desfazer (Ctrl+Z)'}
           >
             <Undo2 className="w-4 h-4" />
           </button>
@@ -116,14 +126,14 @@ export const EditorTopBar: React.FC<Props> = ({
             onClick={onRedo}
             disabled={!canRedo}
             className="p-1.5 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-white disabled:opacity-30 transition-all cursor-pointer"
-            title="Refazer (Ctrl+Shift+Z)"
+            title={redoCommandName ? `Refazer: ${redoCommandName} (Ctrl+Shift+Z)` : 'Refazer (Ctrl+Shift+Z)'}
           >
             <Redo2 className="w-4 h-4" />
           </button>
         </div>
 
         {/* Autosave badge */}
-        <div className="flex items-center gap-1.5 text-[11px] font-sans text-gray-500">
+        <div className="hidden md:flex items-center gap-1.5 text-[11px] font-sans text-gray-500">
           {autosaveStatus === 'saving' ? (
             <>
               <Clock className="w-3.5 h-3.5 text-amber-500 animate-spin" />
@@ -138,8 +148,12 @@ export const EditorTopBar: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* Right: Actions (Salvar como Modelo, Gerar Código, Apresentar) */}
+      {/* Right: Actions (IA Button, Salvar, Código, Apresentar) */}
       <div className="flex items-center gap-1.5 sm:gap-2">
+        {onToggleAIPanel && (
+          <AIButton isOpen={isAIPanelOpen} onClick={onToggleAIPanel} />
+        )}
+
         <button
           onClick={onManualSave}
           className="p-2 sm:px-3 sm:py-1.5 rounded-xl border border-gray-200 hover:bg-gray-50 text-gray-700 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 transition-colors cursor-pointer"

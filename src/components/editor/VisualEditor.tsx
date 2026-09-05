@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   Presentation,
   EditorSlide,
@@ -13,6 +13,33 @@ import { PropertiesSidebar } from './PropertiesSidebar';
 import { AddElementDropdown } from './AddElementDropdown';
 import { CodeModal } from '../dashboard/CodeModal';
 import { savePresentation, saveAsTemplate } from '../../services/storage';
+import {
+  CommandManager,
+  EditorContext,
+  TransformElementCommand,
+  AddElementCommand,
+  DeleteElementCommand,
+  DuplicateElementCommand,
+  UpdateElementContentCommand,
+  UpdateElementPropertiesCommand,
+  AlignElementCommand,
+  ReorderElementLayersCommand,
+  AddSlideCommand,
+  DeleteSlideCommand,
+  DuplicateSlideCommand,
+  MoveSlideCommand,
+  UpdateSlideBackgroundCommand,
+  UpdateSlideNotesCommand,
+  UpdateEntireSlideCommand,
+  BatchApplyPresentationCommand,
+  ElementRect,
+  TransformType,
+} from '../../services/command';
+import { Undo2, Redo2 } from 'lucide-react';
+import { AIPanel } from './ai/AIPanel';
+import { AICreateSlideModal } from './ai/AICreateSlideModal';
+import { VisualIdentity } from '../../types';
+import { createSlideWithAI } from '../../services/aiService';
 
 interface VisualEditorProps {
   presentation: Presentation;
@@ -31,18 +58,160 @@ export const VisualEditor: React.FC<VisualEditorProps> = ({
   const [activeSlideIndex, setActiveSlideIndex] = useState<number>(0);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
 
-  // History stack for Undo / Redo
-  const historyRef = useRef<Presentation[]>([initialPresentation]);
-  const historyIndexRef = useRef<number>(0);
-  const [canUndo, setCanUndo] = useState(false);
-  const [canRedo, setCanRedo] = useState(false);
+  // AI Panel & Modal States
+  const [isAIPanelOpen, setIsAIPanelOpen] = useState<boolean>(false);
+  const [isCreateSlideModalOpen, setIsCreateSlideModalOpen] = useState<boolean>(false);
+  const [isCreatingSlideWithAI, setIsCreatingSlideWithAI] = useState<boolean>(false);
 
-  // Autosave status
+  // Autosave status & timer
   const [autosaveStatus, setAutosaveStatus] = useState<'saving' | 'saved' | 'idle'>('saved');
   const autosaveTimerRef = useRef<any>(null);
 
   // Code Modal
   const [showCodeModal, setShowCodeModal] = useState(false);
+
+  // Command Pattern Manager
+  const commandManagerRef = useRef<CommandManager>(new CommandManager(60));
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+  const [undoCommandName, setUndoCommandName] = useState<string | undefined>(undefined);
+  const [redoCommandName, setRedoCommandName] = useState<string | undefined>(undefined);
+
+  // Visual feedback toast for Undo / Redo
+  const [feedbackToast, setFeedbackToast] = useState<{ message: string; type: 'undo' | 'redo' } | null>(null);
+  const toastTimeoutRef = useRef<any>(null);
+
+  // Ref mirrors to avoid stale state in commands
+  const currentPresRef = useRef(currentPres);
+  currentPresRef.current = currentPres;
+
+  const activeSlideIndexRef = useRef(activeSlideIndex);
+  activeSlideIndexRef.current = activeSlideIndex;
+
+  const selectedElementIdRef = useRef(selectedElementId);
+  selectedElementIdRef.current = selectedElementId;
+
+  // Track recent property edits to merge rapid slider updates
+  const lastPropEditRef = useRef<{
+    id: string;
+    propKeys: string;
+    timestamp: number;
+  } | null>(null);
+
+  // Trigger autosave debounced
+  const scheduleAutosave = useCallback(
+    (pres: Presentation) => {
+      setAutosaveStatus('saving');
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = setTimeout(() => {
+        savePresentation(pres);
+        onPresentationUpdated(pres);
+        setAutosaveStatus('saved');
+      }, 600);
+    },
+    [onPresentationUpdated]
+  );
+
+  // EditorContext for Command pattern execution and rollbacks
+  const editorContext: EditorContext = useMemo(
+    () => ({
+      getPresentation: () => currentPresRef.current,
+      setPresentation: (updater, options) => {
+        setCurrentPres((prev) => {
+          const next = updater(prev);
+          currentPresRef.current = next;
+          if (!options?.skipAutosave) {
+            scheduleAutosave(next);
+          }
+          return next;
+        });
+      },
+      getActiveSlideIndex: () => activeSlideIndexRef.current,
+      setActiveSlideIndex: (index: number) => {
+        setActiveSlideIndex(index);
+        activeSlideIndexRef.current = index;
+      },
+      getSelectedElementId: () => selectedElementIdRef.current,
+      setSelectedElementId: (id: string | null) => {
+        setSelectedElementId(id);
+        selectedElementIdRef.current = id;
+      },
+      showFeedbackToast: (message, type) => {
+        if (type === 'undo' || type === 'redo') {
+          setFeedbackToast({ message, type });
+          if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+          toastTimeoutRef.current = setTimeout(() => {
+            setFeedbackToast(null);
+          }, 2200);
+        }
+      },
+    }),
+    [scheduleAutosave]
+  );
+
+  // Subscribe to command manager events
+  useEffect(() => {
+    const manager = commandManagerRef.current;
+
+    manager.onFeedback = (message, type) => {
+      setFeedbackToast({ message, type });
+      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+      toastTimeoutRef.current = setTimeout(() => {
+        setFeedbackToast(null);
+      }, 2200);
+    };
+
+    const unsubscribe = manager.subscribe(() => {
+      setCanUndo(manager.canUndo());
+      setCanRedo(manager.canRedo());
+      setUndoCommandName(manager.getUndoCommandName());
+      setRedoCommandName(manager.getRedoCommandName());
+    });
+
+    return () => {
+      unsubscribe();
+      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    };
+  }, []);
+
+  // Global Keyboard shortcuts for Undo (Ctrl/Cmd+Z) and Redo (Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isField =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target?.getAttribute('contenteditable') === 'true';
+
+      const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+      if (!isCtrlOrCmd) return;
+
+      const isZ = e.key === 'z' || e.key === 'Z';
+      const isY = e.key === 'y' || e.key === 'Y';
+
+      // Undo: Ctrl+Z or Cmd+Z (without shift)
+      if (isZ && !e.shiftKey) {
+        if (isField) return; // Allow native undo inside active inputs
+        e.preventDefault();
+        commandManagerRef.current.undo();
+      }
+      // Redo: Ctrl+Shift+Z or Cmd+Shift+Z or Ctrl+Y or Cmd+Y
+      else if ((isZ && e.shiftKey) || isY) {
+        if (isField) return;
+        e.preventDefault();
+        commandManagerRef.current.redo();
+      }
+      // AI Assistant: Ctrl+I or Cmd+I
+      else if (e.key === 'i' || e.key === 'I') {
+        if (isField) return;
+        e.preventDefault();
+        setIsAIPanelOpen((prev) => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Safe active slide
   const activeSlide: EditorSlide =
@@ -54,71 +223,9 @@ export const VisualEditor: React.FC<VisualEditorProps> = ({
       background: { type: 'color', value: '#FFFFFF' },
     };
 
-  // Helper to push history
-  const pushHistory = (newPres: Presentation) => {
-    const nextHistory = historyRef.current.slice(0, historyIndexRef.current + 1);
-    nextHistory.push(newPres);
-    // Limit history to 30 states
-    if (nextHistory.length > 30) nextHistory.shift();
-
-    historyRef.current = nextHistory;
-    historyIndexRef.current = nextHistory.length - 1;
-    setCanUndo(historyIndexRef.current > 0);
-    setCanRedo(false);
-  };
-
-  // State update wrapper with debounce autosave
-  const updatePresentation = useCallback(
-    (updater: (prev: Presentation) => Presentation, recordHistory = true) => {
-      setCurrentPres((prev) => {
-        const next = updater(prev);
-        if (recordHistory) {
-          pushHistory(next);
-        }
-
-        // Trigger autosave with debounce
-        setAutosaveStatus('saving');
-        if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
-        autosaveTimerRef.current = setTimeout(() => {
-          savePresentation(next);
-          onPresentationUpdated(next);
-          setAutosaveStatus('saved');
-        }, 600);
-
-        return next;
-      });
-    },
-    [onPresentationUpdated]
-  );
-
-  // Undo / Redo handlers
-  const handleUndo = () => {
-    if (historyIndexRef.current > 0) {
-      historyIndexRef.current -= 1;
-      const target = historyRef.current[historyIndexRef.current];
-      setCurrentPres(target);
-      setCanUndo(historyIndexRef.current > 0);
-      setCanRedo(true);
-      savePresentation(target);
-      onPresentationUpdated(target);
-    }
-  };
-
-  const handleRedo = () => {
-    if (historyIndexRef.current < historyRef.current.length - 1) {
-      historyIndexRef.current += 1;
-      const target = historyRef.current[historyIndexRef.current];
-      setCurrentPres(target);
-      setCanUndo(true);
-      setCanRedo(historyIndexRef.current < historyRef.current.length - 1);
-      savePresentation(target);
-      onPresentationUpdated(target);
-    }
-  };
-
   // Title edit
   const handleTitleChange = (newTitle: string) => {
-    updatePresentation((prev) => ({
+    editorContext.setPresentation((prev) => ({
       ...prev,
       title: newTitle,
       updatedAt: new Date().toISOString(),
@@ -126,7 +233,72 @@ export const VisualEditor: React.FC<VisualEditorProps> = ({
   };
 
   // =========================================================
-  // SLIDE MANAGEMENT
+  // CANVAS TRANSFORM COMMANDS (Drag Move, Resize, Rotate)
+  // =========================================================
+
+  // Live updates during continuous dragging for 60fps rendering without creating hundreds of commands
+  const handleLiveUpdateElement = (id: string, updates: Partial<SlideElement>) => {
+    setCurrentPres((prev) => {
+      const nextSlides = [...prev.slides];
+      const slide = nextSlides[activeSlideIndexRef.current];
+      if (!slide) return prev;
+
+      nextSlides[activeSlideIndexRef.current] = {
+        ...slide,
+        elements: slide.elements.map((el) => (el.id === id ? { ...el, ...updates } : el)),
+      };
+      const nextPres = { ...prev, slides: nextSlides };
+      currentPresRef.current = nextPres;
+      return nextPres;
+    });
+  };
+
+  // Commit transform after gesture completes (pointer up)
+  const handleCommitTransform = (
+    id: string,
+    prevRect: ElementRect,
+    newRect: ElementRect,
+    actionType: TransformType
+  ) => {
+    const cmd = new TransformElementCommand(
+      editorContext,
+      activeSlideIndexRef.current,
+      id,
+      prevRect,
+      newRect,
+      actionType
+    );
+    commandManagerRef.current.execute(cmd);
+  };
+
+  // Commit keyboard nudge (arrow keys)
+  const handleCommitNudge = (id: string, prevRect: ElementRect, newRect: ElementRect) => {
+    const cmd = new TransformElementCommand(
+      editorContext,
+      activeSlideIndexRef.current,
+      id,
+      prevRect,
+      newRect,
+      'nudge'
+    );
+    commandManagerRef.current.execute(cmd);
+  };
+
+  // Commit inline text editing on blur
+  const handleCommitTextEdit = (id: string, prevText: string, newText: string) => {
+    const cmd = new UpdateElementContentCommand(
+      editorContext,
+      activeSlideIndexRef.current,
+      id,
+      prevText,
+      newText,
+      'texto'
+    );
+    commandManagerRef.current.execute(cmd);
+  };
+
+  // =========================================================
+  // SLIDE MANAGEMENT VIA COMMANDS
   // =========================================================
   const handleAddSlide = () => {
     const newSlideId = `slide-${Date.now()}`;
@@ -180,13 +352,8 @@ export const VisualEditor: React.FC<VisualEditorProps> = ({
       },
     };
 
-    updatePresentation((prev) => ({
-      ...prev,
-      slides: [...prev.slides, newSlide],
-      updatedAt: new Date().toISOString(),
-    }));
-    setActiveSlideIndex(currentPres.slides.length);
-    setSelectedElementId(null);
+    const cmd = new AddSlideCommand(editorContext, newSlide, currentPres.slides.length);
+    commandManagerRef.current.execute(cmd);
   };
 
   const handleDuplicateSlide = (index: number) => {
@@ -203,95 +370,98 @@ export const VisualEditor: React.FC<VisualEditorProps> = ({
       })),
     };
 
-    const nextSlides = [...currentPres.slides];
-    nextSlides.splice(index + 1, 0, duplicatedSlide);
-
-    updatePresentation((prev) => ({
-      ...prev,
-      slides: nextSlides,
-      updatedAt: new Date().toISOString(),
-    }));
-    setActiveSlideIndex(index + 1);
+    const cmd = new DuplicateSlideCommand(editorContext, duplicatedSlide, index + 1, index);
+    commandManagerRef.current.execute(cmd);
   };
 
   const handleDeleteSlide = (index: number) => {
     if (currentPres.slides.length <= 1) return;
-    const nextSlides = currentPres.slides.filter((_, i) => i !== index);
-    const nextActive = Math.max(0, Math.min(nextSlides.length - 1, index === activeSlideIndex ? index - 1 : activeSlideIndex));
+    const targetSlide = currentPres.slides[index];
+    if (!targetSlide) return;
 
-    updatePresentation((prev) => ({
-      ...prev,
-      slides: nextSlides,
-      updatedAt: new Date().toISOString(),
-    }));
-    setActiveSlideIndex(nextActive);
-    setSelectedElementId(null);
+    const cmd = new DeleteSlideCommand(editorContext, targetSlide, index);
+    commandManagerRef.current.execute(cmd);
   };
 
   const handleMoveSlideUp = (index: number) => {
     if (index === 0) return;
-    const nextSlides = [...currentPres.slides];
-    const temp = nextSlides[index];
-    nextSlides[index] = nextSlides[index - 1];
-    nextSlides[index - 1] = temp;
-
-    updatePresentation((prev) => ({
-      ...prev,
-      slides: nextSlides,
-      updatedAt: new Date().toISOString(),
-    }));
-    setActiveSlideIndex(index - 1);
+    const cmd = new MoveSlideCommand(editorContext, index, index - 1);
+    commandManagerRef.current.execute(cmd);
   };
 
   const handleMoveSlideDown = (index: number) => {
     if (index === currentPres.slides.length - 1) return;
-    const nextSlides = [...currentPres.slides];
-    const temp = nextSlides[index];
-    nextSlides[index] = nextSlides[index + 1];
-    nextSlides[index + 1] = temp;
-
-    updatePresentation((prev) => ({
-      ...prev,
-      slides: nextSlides,
-      updatedAt: new Date().toISOString(),
-    }));
-    setActiveSlideIndex(index + 1);
+    const cmd = new MoveSlideCommand(editorContext, index, index + 1);
+    commandManagerRef.current.execute(cmd);
   };
 
   // =========================================================
-  // ELEMENT MANAGEMENT
+  // ELEMENT MANAGEMENT VIA COMMANDS
   // =========================================================
-  const handleUpdateElement = (id: string, updates: Partial<SlideElement>) => {
-    updatePresentation((prev) => {
-      const nextSlides = [...prev.slides];
-      const slide = nextSlides[activeSlideIndex];
-      if (!slide) return prev;
 
-      nextSlides[activeSlideIndex] = {
-        ...slide,
-        elements: slide.elements.map((el) => (el.id === id ? { ...el, ...updates } : el)),
-      };
-      return { ...prev, slides: nextSlides, updatedAt: new Date().toISOString() };
-    });
+  // Update properties from PropertiesSidebar (e.g. font, color, border, alignment)
+  const handleUpdateElementProperties = (
+    id: string,
+    updates: Partial<SlideElement>,
+    actionName?: string
+  ) => {
+    const slide = currentPresRef.current.slides[activeSlideIndexRef.current];
+    if (!slide) return;
+    const target = slide.elements.find((el) => el.id === id);
+    if (!target) return;
+
+    // Snapshot previous values for specified update keys
+    const prevProperties: Partial<SlideElement> = {};
+    for (const key of Object.keys(updates) as (keyof SlideElement)[]) {
+      if (key === 'style') {
+        prevProperties.style = { ...target.style };
+      } else {
+        (prevProperties as any)[key] = target[key];
+      }
+    }
+
+    const propKeys = Object.keys(updates).join(',') + (updates.style ? Object.keys(updates.style).join(',') : '');
+    const now = Date.now();
+
+    // If rapidly sliding the same numeric property within 400ms, update state smoothly
+    if (
+      lastPropEditRef.current &&
+      lastPropEditRef.current.id === id &&
+      lastPropEditRef.current.propKeys === propKeys &&
+      now - lastPropEditRef.current.timestamp < 400
+    ) {
+      handleLiveUpdateElement(id, updates);
+      scheduleAutosave(currentPresRef.current);
+      lastPropEditRef.current.timestamp = now;
+      return;
+    }
+
+    lastPropEditRef.current = { id, propKeys, timestamp: now };
+
+    const cmd = new UpdateElementPropertiesCommand(
+      editorContext,
+      activeSlideIndexRef.current,
+      id,
+      prevProperties,
+      updates,
+      actionName || 'Alterar propriedades'
+    );
+    commandManagerRef.current.execute(cmd);
   };
 
   const handleDeleteElement = (id: string) => {
-    updatePresentation((prev) => {
-      const nextSlides = [...prev.slides];
-      const slide = nextSlides[activeSlideIndex];
-      if (!slide) return prev;
+    const slide = currentPresRef.current.slides[activeSlideIndexRef.current];
+    if (!slide) return;
+    const index = slide.elements.findIndex((el) => el.id === id);
+    const element = slide.elements[index];
+    if (!element || index === -1) return;
 
-      nextSlides[activeSlideIndex] = {
-        ...slide,
-        elements: slide.elements.filter((el) => el.id !== id),
-      };
-      return { ...prev, slides: nextSlides, updatedAt: new Date().toISOString() };
-    });
-    setSelectedElementId(null);
+    const cmd = new DeleteElementCommand(editorContext, activeSlideIndexRef.current, element, index);
+    commandManagerRef.current.execute(cmd);
   };
 
   const handleDuplicateElement = (id: string) => {
-    const slide = currentPres.slides[activeSlideIndex];
+    const slide = currentPresRef.current.slides[activeSlideIndexRef.current];
     const target = slide?.elements.find((el) => el.id === id);
     if (!target) return;
 
@@ -305,80 +475,101 @@ export const VisualEditor: React.FC<VisualEditorProps> = ({
       zIndex: (target.zIndex || 1) + 1,
     };
 
-    updatePresentation((prev) => {
-      const nextSlides = [...prev.slides];
-      const cur = nextSlides[activeSlideIndex];
-      nextSlides[activeSlideIndex] = {
-        ...cur,
-        elements: [...cur.elements, duplicated],
-      };
-      return { ...prev, slides: nextSlides, updatedAt: new Date().toISOString() };
-    });
-    setSelectedElementId(newId);
+    const cmd = new DuplicateElementCommand(editorContext, activeSlideIndexRef.current, duplicated, id);
+    commandManagerRef.current.execute(cmd);
   };
 
   const handleBringForward = (id: string) => {
-    updatePresentation((prev) => {
-      const nextSlides = [...prev.slides];
-      const slide = nextSlides[activeSlideIndex];
-      if (!slide) return prev;
+    const slide = currentPresRef.current.slides[activeSlideIndexRef.current];
+    if (!slide) return;
 
-      const elements = [...slide.elements];
-      const maxZ = Math.max(...elements.map((e) => e.zIndex || 0), 1);
-      nextSlides[activeSlideIndex] = {
-        ...slide,
-        elements: elements.map((el) => (el.id === id ? { ...el, zIndex: maxZ + 1 } : el)),
-      };
-      return { ...prev, slides: nextSlides, updatedAt: new Date().toISOString() };
-    });
+    const prevElements = [...slide.elements];
+    const maxZ = Math.max(...prevElements.map((e) => e.zIndex || 0), 1);
+    const newElements = prevElements.map((el) => (el.id === id ? { ...el, zIndex: maxZ + 1 } : el));
+
+    const cmd = new ReorderElementLayersCommand(
+      editorContext,
+      activeSlideIndexRef.current,
+      id,
+      prevElements,
+      newElements,
+      'forward'
+    );
+    commandManagerRef.current.execute(cmd);
   };
 
   const handleSendBackward = (id: string) => {
-    updatePresentation((prev) => {
-      const nextSlides = [...prev.slides];
-      const slide = nextSlides[activeSlideIndex];
-      if (!slide) return prev;
+    const slide = currentPresRef.current.slides[activeSlideIndexRef.current];
+    if (!slide) return;
 
-      const elements = [...slide.elements];
-      const minZ = Math.min(...elements.map((e) => e.zIndex || 0), 1);
-      nextSlides[activeSlideIndex] = {
-        ...slide,
-        elements: elements.map((el) => (el.id === id ? { ...el, zIndex: Math.max(0, minZ - 1) } : el)),
-      };
-      return { ...prev, slides: nextSlides, updatedAt: new Date().toISOString() };
-    });
+    const prevElements = [...slide.elements];
+    const minZ = Math.min(...prevElements.map((e) => e.zIndex || 0), 1);
+    const newElements = prevElements.map((el) =>
+      el.id === id ? { ...el, zIndex: Math.max(0, minZ - 1) } : el
+    );
+
+    const cmd = new ReorderElementLayersCommand(
+      editorContext,
+      activeSlideIndexRef.current,
+      id,
+      prevElements,
+      newElements,
+      'backward'
+    );
+    commandManagerRef.current.execute(cmd);
   };
 
-  const handleAlignElement = (id: string, alignment: 'left' | 'center-h' | 'right' | 'top' | 'center-v' | 'bottom') => {
-    const slide = currentPres.slides[activeSlideIndex];
+  const handleAlignElement = (
+    id: string,
+    alignment: 'left' | 'center-h' | 'right' | 'top' | 'center-v' | 'bottom'
+  ) => {
+    const slide = currentPresRef.current.slides[activeSlideIndexRef.current];
     const target = slide?.elements.find((el) => el.id === id);
     if (!target) return;
 
-    let updates: Partial<SlideElement> = {};
+    const prevCoords = { x: target.x, y: target.y };
+    let newCoords = { x: target.x, y: target.y };
+    let label = 'Esquerda';
+
     switch (alignment) {
       case 'left':
-        updates = { x: 5 };
+        newCoords = { ...newCoords, x: 5 };
+        label = 'Esquerda';
         break;
       case 'center-h':
-        updates = { x: Math.round((50 - target.width / 2) * 10) / 10 };
+        newCoords = { ...newCoords, x: Math.round((50 - target.width / 2) * 10) / 10 };
+        label = 'Centro Horizontal';
         break;
       case 'right':
-        updates = { x: Math.round((95 - target.width) * 10) / 10 };
+        newCoords = { ...newCoords, x: Math.round((95 - target.width) * 10) / 10 };
+        label = 'Direita';
         break;
       case 'top':
-        updates = { y: 5 };
+        newCoords = { ...newCoords, y: 5 };
+        label = 'Topo';
         break;
       case 'center-v':
-        updates = { y: Math.round((50 - target.height / 2) * 10) / 10 };
+        newCoords = { ...newCoords, y: Math.round((50 - target.height / 2) * 10) / 10 };
+        label = 'Centro Vertical';
         break;
       case 'bottom':
-        updates = { y: Math.round((95 - target.height) * 10) / 10 };
+        newCoords = { ...newCoords, y: Math.round((95 - target.height) * 10) / 10 };
+        label = 'Base';
         break;
     }
-    handleUpdateElement(id, updates);
+
+    const cmd = new AlignElementCommand(
+      editorContext,
+      activeSlideIndexRef.current,
+      id,
+      prevCoords,
+      newCoords,
+      label
+    );
+    commandManagerRef.current.execute(cmd);
   };
 
-  // Add Elements
+  // Add Elements via AddElementCommand
   const handleAddText = (type: 'title' | 'subtitle' | 'body' | 'free') => {
     const id = `elem-txt-${Date.now()}`;
     let newElem: SlideElement;
@@ -388,7 +579,7 @@ export const VisualEditor: React.FC<VisualEditorProps> = ({
         id,
         type: 'text',
         name: 'Título',
-        content: 'Novo Título do Slide',
+        content: 'Novo Título Principal',
         x: 10,
         y: 20,
         width: 80,
@@ -407,17 +598,17 @@ export const VisualEditor: React.FC<VisualEditorProps> = ({
         id,
         type: 'text',
         name: 'Subtítulo',
-        content: 'Subtítulo complementar',
+        content: 'Adicione um subtítulo explicativo com detalhes adicionais',
         x: 15,
-        y: 45,
+        y: 42,
         width: 70,
         height: 12,
         zIndex: 10,
         style: {
           fontFamily: 'sans',
-          fontSize: 24,
-          fontWeight: 'medium',
-          color: '#475569',
+          fontSize: 22,
+          fontWeight: 'normal',
+          color: '#64748B',
           textAlign: 'center',
         },
       };
@@ -425,16 +616,17 @@ export const VisualEditor: React.FC<VisualEditorProps> = ({
       newElem = {
         id,
         type: 'text',
-        name: 'Texto',
-        content: 'Digite seu texto aqui. Explique sua ideia com clareza.',
-        x: 15,
+        name: 'Parágrafo',
+        content:
+          'Escreva seu parágrafo ou argumentação. Apresente seus dados e tópicos com clareza e autoridade.',
+        x: 20,
         y: 40,
-        width: 70,
+        width: 60,
         height: 25,
         zIndex: 10,
         style: {
           fontFamily: 'sans',
-          fontSize: 18,
+          fontSize: 16,
           fontWeight: 'normal',
           color: '#334155',
           textAlign: 'left',
@@ -445,16 +637,16 @@ export const VisualEditor: React.FC<VisualEditorProps> = ({
       newElem = {
         id,
         type: 'text',
-        name: 'Texto Livre',
-        content: 'Texto livre',
-        x: 20,
-        y: 40,
-        width: 60,
-        height: 15,
+        name: 'Caixa de Texto',
+        content: 'Texto livre para personalização',
+        x: 35,
+        y: 45,
+        width: 30,
+        height: 10,
         zIndex: 10,
         style: {
           fontFamily: 'sans',
-          fontSize: 20,
+          fontSize: 18,
           fontWeight: 'normal',
           color: '#1E293B',
           textAlign: 'left',
@@ -462,16 +654,8 @@ export const VisualEditor: React.FC<VisualEditorProps> = ({
       };
     }
 
-    updatePresentation((prev) => {
-      const nextSlides = [...prev.slides];
-      const slide = nextSlides[activeSlideIndex];
-      nextSlides[activeSlideIndex] = {
-        ...slide,
-        elements: [...slide.elements, newElem],
-      };
-      return { ...prev, slides: nextSlides, updatedAt: new Date().toISOString() };
-    });
-    setSelectedElementId(id);
+    const cmd = new AddElementCommand(editorContext, activeSlideIndexRef.current, newElem);
+    commandManagerRef.current.execute(cmd);
   };
 
   const handleAddImage = (imageUrl: string) => {
@@ -493,16 +677,8 @@ export const VisualEditor: React.FC<VisualEditorProps> = ({
       },
     };
 
-    updatePresentation((prev) => {
-      const nextSlides = [...prev.slides];
-      const slide = nextSlides[activeSlideIndex];
-      nextSlides[activeSlideIndex] = {
-        ...slide,
-        elements: [...slide.elements, newElem],
-      };
-      return { ...prev, slides: nextSlides, updatedAt: new Date().toISOString() };
-    });
-    setSelectedElementId(id);
+    const cmd = new AddElementCommand(editorContext, activeSlideIndexRef.current, newElem);
+    commandManagerRef.current.execute(cmd);
   };
 
   const handleAddShape = (shapeType: 'rectangle' | 'circle' | 'rounded-box' | 'line' | 'divider') => {
@@ -561,16 +737,8 @@ export const VisualEditor: React.FC<VisualEditorProps> = ({
       };
     }
 
-    updatePresentation((prev) => {
-      const nextSlides = [...prev.slides];
-      const slide = nextSlides[activeSlideIndex];
-      nextSlides[activeSlideIndex] = {
-        ...slide,
-        elements: [...slide.elements, newElem],
-      };
-      return { ...prev, slides: nextSlides, updatedAt: new Date().toISOString() };
-    });
-    setSelectedElementId(id);
+    const cmd = new AddElementCommand(editorContext, activeSlideIndexRef.current, newElem);
+    commandManagerRef.current.execute(cmd);
   };
 
   const handleAddNumber = () => {
@@ -593,16 +761,8 @@ export const VisualEditor: React.FC<VisualEditorProps> = ({
       },
     };
 
-    updatePresentation((prev) => {
-      const nextSlides = [...prev.slides];
-      const slide = nextSlides[activeSlideIndex];
-      nextSlides[activeSlideIndex] = {
-        ...slide,
-        elements: [...slide.elements, newElem],
-      };
-      return { ...prev, slides: nextSlides, updatedAt: new Date().toISOString() };
-    });
-    setSelectedElementId(id);
+    const cmd = new AddElementCommand(editorContext, activeSlideIndexRef.current, newElem);
+    commandManagerRef.current.execute(cmd);
   };
 
   const handleAddQuote = () => {
@@ -625,45 +785,135 @@ export const VisualEditor: React.FC<VisualEditorProps> = ({
       },
     };
 
-    updatePresentation((prev) => {
-      const nextSlides = [...prev.slides];
-      const slide = nextSlides[activeSlideIndex];
-      nextSlides[activeSlideIndex] = {
-        ...slide,
-        elements: [...slide.elements, newElem],
-      };
-      return { ...prev, slides: nextSlides, updatedAt: new Date().toISOString() };
-    });
-    setSelectedElementId(id);
+    const cmd = new AddElementCommand(editorContext, activeSlideIndexRef.current, newElem);
+    commandManagerRef.current.execute(cmd);
   };
 
-  // Background & Notes updates
+  // Background & Notes updates via commands
   const handleUpdateSlideBackground = (background: SlideBackground) => {
-    updatePresentation((prev) => {
-      const nextSlides = [...prev.slides];
-      nextSlides[activeSlideIndex] = {
-        ...nextSlides[activeSlideIndex],
-        background,
-      };
-      return { ...prev, slides: nextSlides, updatedAt: new Date().toISOString() };
-    });
+    const slide = currentPresRef.current.slides[activeSlideIndexRef.current];
+    if (!slide) return;
+    const prevBg = slide.background || { type: 'color', value: '#FFFFFF' };
+    const cmd = new UpdateSlideBackgroundCommand(
+      editorContext,
+      activeSlideIndexRef.current,
+      prevBg,
+      background
+    );
+    commandManagerRef.current.execute(cmd);
   };
 
   const handleUpdateSlideNotes = (notes: PresenterNote) => {
-    updatePresentation((prev) => {
-      const nextSlides = [...prev.slides];
-      nextSlides[activeSlideIndex] = {
-        ...nextSlides[activeSlideIndex],
-        notes,
-      };
-      return { ...prev, slides: nextSlides, updatedAt: new Date().toISOString() };
-    });
+    const slide = currentPresRef.current.slides[activeSlideIndexRef.current];
+    if (!slide) return;
+    const prevNotes = slide.notes || { script: '', question: '', suggestedTime: '', objective: '' };
+    const cmd = new UpdateSlideNotesCommand(
+      editorContext,
+      activeSlideIndexRef.current,
+      prevNotes,
+      notes
+    );
+    commandManagerRef.current.execute(cmd);
   };
 
   // Save as Template
   const handleSaveAsTemplate = () => {
     saveAsTemplate(currentPres);
     alert(`Apresentação salva como modelo com sucesso! Você pode encontrá-la na aba "Meus Modelos".`);
+  };
+
+  // AI Handlers
+  const handleApplySlideEdit = (updatedSlide: EditorSlide, description: string) => {
+    const prevSlide = currentPresRef.current.slides[activeSlideIndexRef.current];
+    if (!prevSlide) return;
+    const cmd = new UpdateEntireSlideCommand(
+      editorContext,
+      activeSlideIndexRef.current,
+      prevSlide,
+      updatedSlide,
+      `IA: ${description}`
+    );
+    commandManagerRef.current.execute(cmd);
+  };
+
+  const handleAddNewSlide = (newSlide: EditorSlide) => {
+    const insertIndex = activeSlideIndexRef.current + 1;
+    const cmd = new AddSlideCommand(editorContext, newSlide, insertIndex);
+    commandManagerRef.current.execute(cmd);
+    setActiveSlideIndex(insertIndex);
+    setSelectedElementId(null);
+  };
+
+  const handleCreateSlideFromModal = async (slideType: string, customPrompt: string) => {
+    setIsCreatingSlideWithAI(true);
+    try {
+      const res = await createSlideWithAI({
+        prompt: customPrompt || `Criar slide profissional do tipo ${slideType}`,
+        slideType,
+        afterSlideIndex: activeSlideIndexRef.current,
+        presentationContext: {
+          presentationTitle: currentPresRef.current.title,
+          totalSlides: currentPresRef.current.slides.length,
+          currentSlide: { title: activeSlide.title },
+          visualIdentity: currentPresRef.current.visualIdentity,
+        },
+      });
+
+      handleAddNewSlide(res.newSlide);
+    } catch (err: any) {
+      console.error('Falha ao criar slide com IA:', err);
+      alert(err.message || 'Erro ao criar slide com IA');
+    } finally {
+      setIsCreatingSlideWithAI(false);
+    }
+  };
+
+  const handleApplyIdentityToAll = (identity: VisualIdentity) => {
+    const prevPres = currentPresRef.current;
+    const newPres: Presentation = {
+      ...prevPres,
+      visualIdentity: identity,
+      slides: prevPres.slides.map((s) => ({
+        ...s,
+        background:
+          s.background?.type === 'color'
+            ? { type: 'color', value: identity.backgroundColor || '#FDFBF7' }
+            : s.background,
+        elements: s.elements.map((el) => {
+          if (el.locked) return el;
+          if (el.type === 'text') {
+            const isTitle = el.style.fontSize && el.style.fontSize > 26;
+            return {
+              ...el,
+              style: {
+                ...el.style,
+                fontFamily: isTitle ? 'serif' : 'sans-serif',
+                color: isTitle ? identity.primaryColor : el.style.color || '#2C2C2C',
+              },
+            };
+          }
+          if (el.type === 'shape') {
+            return {
+              ...el,
+              style: {
+                ...el.style,
+                backgroundColor: identity.primaryColor,
+              },
+            };
+          }
+          return el;
+        }),
+      })),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const cmd = new BatchApplyPresentationCommand(
+      editorContext,
+      prevPres,
+      newPres,
+      'IA: Aplicar Identidade Visual'
+    );
+    commandManagerRef.current.execute(cmd);
   };
 
   // Collect all images used in this presentation for library reuse
@@ -675,16 +925,18 @@ export const VisualEditor: React.FC<VisualEditorProps> = ({
   const selectedElement = activeSlide.elements.find((el) => el.id === selectedElementId) || null;
 
   return (
-    <div className="w-full h-screen flex flex-col bg-[#FDFDFD] text-[#2C2C2C] overflow-hidden select-none font-sans">
-      {/* Top Bar */}
+    <div className="w-full h-screen flex flex-col bg-[#FDFDFD] text-[#2C2C2C] overflow-hidden select-none font-sans relative">
+      {/* Top Bar with Command Pattern Undo / Redo & AI Toggle */}
       <EditorTopBar
         title={currentPres.title}
         onTitleChange={handleTitleChange}
         onBack={onBackToDashboard}
-        onUndo={handleUndo}
-        onRedo={handleRedo}
+        onUndo={() => commandManagerRef.current.undo()}
+        onRedo={() => commandManagerRef.current.redo()}
         canUndo={canUndo}
         canRedo={canRedo}
+        undoCommandName={undoCommandName}
+        redoCommandName={redoCommandName}
         autosaveStatus={autosaveStatus}
         onManualSave={() => {
           savePresentation(currentPres);
@@ -693,6 +945,8 @@ export const VisualEditor: React.FC<VisualEditorProps> = ({
         onSaveAsTemplate={handleSaveAsTemplate}
         onGenerateCode={() => setShowCodeModal(true)}
         onPresent={() => onPresent(currentPres, activeSlideIndex)}
+        isAIPanelOpen={isAIPanelOpen}
+        onToggleAIPanel={() => setIsAIPanelOpen((prev) => !prev)}
       />
 
       {/* Quick Add Elements Sub-header */}
@@ -713,13 +967,13 @@ export const VisualEditor: React.FC<VisualEditorProps> = ({
 
         <div className="flex items-center gap-3 text-xs text-gray-400">
           <span className="hidden md:inline">
-            Formato: 16:9 • Autosave ativo
+            Formato: 16:9 • Comandos: Ctrl+Z / Ctrl+Shift+Z • IA: Ctrl+I
           </span>
         </div>
       </div>
 
-      {/* Main Workspace (Left Sidebar + Center Canvas + Right Inspector) */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* Main Workspace (Left Sidebar + Center Canvas + Right Inspector or AI Assistant Panel) */}
+      <div className="flex-1 flex overflow-hidden relative">
         {/* Left Thumbnails List */}
         <SlideListSidebar
           slides={currentPres.slides}
@@ -729,45 +983,92 @@ export const VisualEditor: React.FC<VisualEditorProps> = ({
             setSelectedElementId(null);
           }}
           onAddSlide={handleAddSlide}
+          onOpenCreateWithAI={() => setIsCreateSlideModalOpen(true)}
           onDuplicateSlide={handleDuplicateSlide}
           onDeleteSlide={handleDeleteSlide}
           onMoveSlideUp={handleMoveSlideUp}
           onMoveSlideDown={handleMoveSlideDown}
         />
 
-        {/* Center Interactive Canvas */}
+        {/* Center Interactive Canvas with Command Commits */}
         <EditorCanvas
           slide={activeSlide}
           selectedElementId={selectedElementId}
           onSelectElement={setSelectedElementId}
-          onUpdateElement={handleUpdateElement}
+          onUpdateElement={handleLiveUpdateElement}
+          onCommitTransform={handleCommitTransform}
+          onCommitNudge={handleCommitNudge}
+          onCommitTextEdit={handleCommitTextEdit}
           onDeleteElement={handleDeleteElement}
           onDuplicateElement={handleDuplicateElement}
           onImageDrop={handleAddImage}
         />
 
-        {/* Right Inspector / Properties Sidebar */}
-        <PropertiesSidebar
-          slide={activeSlide}
-          selectedElement={selectedElement}
-          onUpdateElement={handleUpdateElement}
-          onUpdateSlideBackground={handleUpdateSlideBackground}
-          onUpdateSlideNotes={handleUpdateSlideNotes}
-          onDuplicateElement={handleDuplicateElement}
-          onDeleteElement={handleDeleteElement}
-          onBringForward={handleBringForward}
-          onSendBackward={handleSendBackward}
-          onAlignElement={handleAlignElement}
-          presentationImages={presentationImages}
-          onSelectElement={setSelectedElementId}
-        />
+        {/* AI Assistant Side Panel (if open) */}
+        {isAIPanelOpen ? (
+          <AIPanel
+            isOpen={isAIPanelOpen}
+            onClose={() => setIsAIPanelOpen(false)}
+            slide={activeSlide}
+            slideIndex={activeSlideIndex}
+            presentation={currentPres}
+            onApplySlideEdit={handleApplySlideEdit}
+            onAddNewSlide={handleAddNewSlide}
+            onUndoLastAction={() => commandManagerRef.current.undo()}
+            canUndo={canUndo}
+            onGoToSlide={(idx) => {
+              setActiveSlideIndex(idx);
+              setSelectedElementId(null);
+            }}
+            onApplyIdentityToAll={handleApplyIdentityToAll}
+          />
+        ) : (
+          /* Right Inspector / Properties Sidebar */
+          <PropertiesSidebar
+            slide={activeSlide}
+            selectedElement={selectedElement}
+            onUpdateElement={handleUpdateElementProperties}
+            onUpdateSlideBackground={handleUpdateSlideBackground}
+            onUpdateSlideNotes={handleUpdateSlideNotes}
+            onDuplicateElement={handleDuplicateElement}
+            onDeleteElement={handleDeleteElement}
+            onBringForward={handleBringForward}
+            onSendBackward={handleSendBackward}
+            onAlignElement={handleAlignElement}
+            presentationImages={presentationImages}
+            onSelectElement={setSelectedElementId}
+          />
+        )}
       </div>
+
+      {/* Visual Feedback Toast for Undo / Redo */}
+      {feedbackToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-4 py-2 bg-gray-900/95 backdrop-blur-md text-white rounded-full text-xs font-medium shadow-2xl border border-white/10 pointer-events-none animate-in fade-in slide-in-from-bottom-3 duration-200">
+          {feedbackToast.type === 'undo' ? (
+            <Undo2 className="w-3.5 h-3.5 text-emerald-400" />
+          ) : (
+            <Redo2 className="w-3.5 h-3.5 text-emerald-400" />
+          )}
+          <span>{feedbackToast.message}</span>
+          <span className="text-gray-400 text-[10px] pl-1.5 border-l border-gray-700">
+            {feedbackToast.type === 'undo' ? 'Ctrl+Z' : 'Ctrl+Shift+Z'}
+          </span>
+        </div>
+      )}
 
       {/* Code Modal */}
       <CodeModal
         presentation={currentPres}
         isOpen={showCodeModal}
         onClose={() => setShowCodeModal(false)}
+      />
+
+      {/* AI Create Slide Modal */}
+      <AICreateSlideModal
+        isOpen={isCreateSlideModalOpen}
+        onClose={() => setIsCreateSlideModalOpen(false)}
+        onCreateSlide={handleCreateSlideFromModal}
+        isLoading={isCreatingSlideWithAI}
       />
     </div>
   );
