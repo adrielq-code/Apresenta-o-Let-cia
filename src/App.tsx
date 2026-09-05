@@ -1,16 +1,48 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { SLIDES_DATA } from './data/slidesData';
 import { loadSpeakerConfig, saveSpeakerConfig, DEFAULT_SPEAKER_CONFIG } from './data/defaultConfig';
-import { SpeakerConfig, SlideData } from './types';
+import { SpeakerConfig, SlideData, Presentation, AppView, EditorSlide } from './types';
+import {
+  loadPresentations,
+  loadTemplates,
+  getPresentationById,
+  createNewPresentation,
+  duplicatePresentation,
+  saveAsTemplate,
+  createFromTemplate,
+  deletePresentation,
+  importPresentation,
+  savePresentation,
+} from './services/storage';
 import { SlideRenderer } from './components/SlideRenderer';
 import { NavigationControls } from './components/NavigationControls';
 import { SpeakerNotesDrawer } from './components/SpeakerNotesDrawer';
 import { PresenterCockpitModal } from './components/PresenterCockpitModal';
 import { SlideDrawer } from './components/SlideDrawer';
 import { ConfigModal } from './components/ConfigModal';
-import { Sparkles, Play, MonitorPlay, Settings, List, StickyNote } from 'lucide-react';
+import { Dashboard } from './components/dashboard/Dashboard';
+import { VisualEditor } from './components/editor/VisualEditor';
+import { CustomSlideRenderer } from './components/presentation/CustomSlideRenderer';
+import {
+  Sparkles,
+  Play,
+  MonitorPlay,
+  Settings,
+  List,
+  StickyNote,
+  ArrowLeft,
+  Edit3,
+  Home,
+} from 'lucide-react';
 
 export default function App() {
+  // Navigation & View mode
+  const [currentView, setCurrentView] = useState<AppView>('dashboard');
+  const [presentations, setPresentations] = useState<Presentation[]>(loadPresentations);
+  const [templates, setTemplates] = useState<Presentation[]>(loadTemplates);
+  const [activePresentationId, setActivePresentationId] = useState<string>('pres-escolhendo-meu-futuro');
+
+  // Presentation playback state
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [isPresentationStarted, setIsPresentationStarted] = useState(false);
   const [isNotesOpen, setIsNotesOpen] = useState(false);
@@ -24,7 +56,27 @@ export default function App() {
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
 
-  const currentSlide = SLIDES_DATA[currentSlideIndex];
+  // Active presentation object
+  const activePresentation: Presentation =
+    presentations.find((p) => p.id === activePresentationId) ||
+    templates.find((t) => t.id === activePresentationId) ||
+    presentations[0] ||
+    getPresentationById('pres-escolhendo-meu-futuro')!;
+
+  const isNativeKeynote = activePresentation?.id === 'pres-escolhendo-meu-futuro';
+
+  // Current slide count & slides for playback
+  const totalSlidesCount = isNativeKeynote
+    ? SLIDES_DATA.length
+    : activePresentation?.slides?.length || 1;
+
+  const currentNativeSlide = isNativeKeynote
+    ? SLIDES_DATA[Math.min(currentSlideIndex, SLIDES_DATA.length - 1)]
+    : null;
+
+  const currentEditorSlide: EditorSlide | null = !isNativeKeynote && activePresentation?.slides
+    ? activePresentation.slides[Math.min(currentSlideIndex, activePresentation.slides.length - 1)]
+    : null;
 
   // Touch gesture listeners for mobile swipe navigation
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -50,18 +102,21 @@ export default function App() {
 
   // Slide navigation handlers
   const handleNext = useCallback(() => {
-    setCurrentSlideIndex((prev) => Math.min(SLIDES_DATA.length - 1, prev + 1));
-  }, []);
+    setCurrentSlideIndex((prev) => Math.min(totalSlidesCount - 1, prev + 1));
+  }, [totalSlidesCount]);
 
   const handlePrev = useCallback(() => {
     setCurrentSlideIndex((prev) => Math.max(0, prev - 1));
   }, []);
 
-  const handleGoToSlide = useCallback((index: number) => {
-    if (index >= 0 && index < SLIDES_DATA.length) {
-      setCurrentSlideIndex(index);
-    }
-  }, []);
+  const handleGoToSlide = useCallback(
+    (index: number) => {
+      if (index >= 0 && index < totalSlidesCount) {
+        setCurrentSlideIndex(index);
+      }
+    },
+    [totalSlidesCount]
+  );
 
   const handleStartPresentation = () => {
     setIsPresentationStarted(true);
@@ -83,10 +138,11 @@ export default function App() {
     }
   };
 
-  // Keyboard navigation
+  // Keyboard navigation when in 'present' view
   useEffect(() => {
+    if (currentView !== 'present') return;
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Avoid intercepting when typing in an input or textarea
       if (
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement ||
@@ -135,7 +191,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleNext, handlePrev, isPresentationStarted, isCockpitOpen, isNotesOpen, isDrawerOpen, isConfigOpen]);
+  }, [handleNext, handlePrev, isPresentationStarted, isCockpitOpen, isNotesOpen, isDrawerOpen, isConfigOpen, currentView]);
 
   // Handle speaker config update
   const handleSaveConfig = (newConfig: SpeakerConfig) => {
@@ -167,6 +223,121 @@ export default function App() {
     );
   };
 
+  // =========================================================
+  // DASHBOARD ACTION HANDLERS
+  // =========================================================
+  const handleOpenPresentation = (id: string) => {
+    setActivePresentationId(id);
+    setCurrentSlideIndex(0);
+    setIsPresentationStarted(id === 'pres-escolhendo-meu-futuro' ? false : true);
+    setCurrentView('present');
+  };
+
+  const handleEditPresentation = (id: string) => {
+    setActivePresentationId(id);
+    setCurrentView('editor');
+  };
+
+  const handleCreatePresentation = (title: string, format: '16:9') => {
+    const newPres = createNewPresentation(title, format);
+    setPresentations(loadPresentations());
+    setActivePresentationId(newPres.id);
+    setCurrentView('editor');
+  };
+
+  const handleDuplicatePresentation = (id: string) => {
+    duplicatePresentation(id);
+    setPresentations(loadPresentations());
+  };
+
+  const handleDeletePresentation = (id: string) => {
+    deletePresentation(id);
+    setPresentations(loadPresentations());
+  };
+
+  const handleRenamePresentation = (id: string, newTitle: string) => {
+    const pres = getPresentationById(id);
+    if (pres) {
+      savePresentation({ ...pres, title: newTitle });
+      setPresentations(loadPresentations());
+      setTemplates(loadTemplates());
+    }
+  };
+
+  const handleSaveAsTemplateFromDashboard = (id: string) => {
+    saveAsTemplate(id);
+    setTemplates(loadTemplates());
+    alert('Apresentação salva como modelo com sucesso!');
+  };
+
+  const handleCreateFromTemplateFromDashboard = (templateId: string) => {
+    const newPres = createFromTemplate(templateId);
+    if (newPres) {
+      setPresentations(loadPresentations());
+      setActivePresentationId(newPres.id);
+      setCurrentView('editor');
+    }
+  };
+
+  const handleImportPresentationFromDashboard = (code: string): boolean => {
+    const result = importPresentation(code);
+    if (result.success && result.presentation) {
+      setPresentations(loadPresentations());
+      setActivePresentationId(result.presentation.id);
+      setCurrentView('editor');
+      return true;
+    }
+    return false;
+  };
+
+  const handlePresentationUpdated = (updated: Presentation) => {
+    setPresentations(loadPresentations());
+  };
+
+  // =========================================================
+  // RENDER CURRENT VIEW
+  // =========================================================
+
+  // VIEW 1: DASHBOARD
+  if (currentView === 'dashboard') {
+    return (
+      <Dashboard
+        presentations={presentations}
+        templates={templates}
+        onOpenPresentation={handleOpenPresentation}
+        onEditPresentation={handleEditPresentation}
+        onCreatePresentation={handleCreatePresentation}
+        onDuplicatePresentation={handleDuplicatePresentation}
+        onDeletePresentation={handleDeletePresentation}
+        onRenamePresentation={handleRenamePresentation}
+        onSaveAsTemplate={handleSaveAsTemplateFromDashboard}
+        onCreateFromTemplate={handleCreateFromTemplateFromDashboard}
+        onImportPresentation={handleImportPresentationFromDashboard}
+      />
+    );
+  }
+
+  // VIEW 2: VISUAL EDITOR
+  if (currentView === 'editor') {
+    return (
+      <VisualEditor
+        presentation={activePresentation}
+        onBackToDashboard={() => {
+          setPresentations(loadPresentations());
+          setCurrentView('dashboard');
+        }}
+        onPresent={(pres, startSlideIndex) => {
+          setActivePresentationId(pres.id);
+          setCurrentSlideIndex(startSlideIndex);
+          setIsPresentationStarted(true);
+          setCurrentView('present');
+        }}
+        onPresentationUpdated={handlePresentationUpdated}
+      />
+    );
+  }
+
+  // VIEW 3: PRESENTATION MODE (Full interactive mode with "Voltar ao Editor" and "Minhas Apresentações")
   return (
     <div
       ref={containerRef}
@@ -176,9 +347,28 @@ export default function App() {
       <div className="absolute top-10 left-10 w-96 h-96 bg-[#3A6351]/5 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-10 right-10 w-96 h-96 bg-[#3A6351]/5 rounded-full blur-3xl pointer-events-none" />
 
-      {/* Start Splash Screen if not yet started */}
-      {!isPresentationStarted ? (
+      {/* Start Splash Screen if not yet started (for native keynote) */}
+      {!isPresentationStarted && isNativeKeynote ? (
         <div className="w-full min-h-full flex flex-col items-center justify-start sm:justify-center text-center p-4 sm:p-6 z-20 max-w-4xl relative overflow-y-auto my-auto py-6 sm:py-8">
+          {/* Top Quick Back Button */}
+          <div className="w-full flex items-center justify-between mb-4">
+            <button
+              onClick={() => setCurrentView('dashboard')}
+              className="px-4 py-2 rounded-full border border-gray-200 hover:bg-gray-100 text-gray-600 text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-colors cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Minhas Apresentações</span>
+            </button>
+
+            <button
+              onClick={() => setCurrentView('editor')}
+              className="px-4 py-2 rounded-full border border-gray-200 hover:bg-[#F4F7F5] text-gray-700 hover:text-[#3A6351] text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-colors cursor-pointer"
+            >
+              <Edit3 className="w-4 h-4 text-[#3A6351]" />
+              <span>Editar Slides</span>
+            </button>
+          </div>
+
           <div className="inline-flex items-center gap-2 px-4 sm:px-5 py-1.5 rounded-full bg-[#F4F7F5] border border-[#3A6351]/20 text-[#3A6351] text-[11px] sm:text-xs font-bold tracking-[0.25em] uppercase mb-4 sm:mb-6 shadow-sm">
             <Sparkles className="w-3.5 h-3.5 text-[#3A6351]" />
             Palestra Inspiracional • Ensino Médio
@@ -236,32 +426,61 @@ export default function App() {
       ) : (
         /* Active Presentation Stage with Header and Responsive Stage */
         <div className="w-full flex-1 flex flex-col justify-between items-center relative overflow-hidden h-[100dvh]">
-          {/* Header with Quick Navigation & Settings Shortcuts */}
+          {/* Header with Navigation, Exit to Dashboard, and Exit to Editor */}
           <header className="w-full h-12 border-b border-gray-100/90 flex items-center justify-between px-3 sm:px-8 bg-white/90 backdrop-blur-md z-30 shrink-0">
             <div className="flex items-center gap-2 sm:gap-4">
+              {/* Back to Dashboard Button */}
+              <button
+                onClick={() => setCurrentView('dashboard')}
+                className="p-1.5 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors flex items-center gap-1.5 cursor-pointer"
+                title="Voltar para Minhas Apresentações"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span className="hidden md:inline text-[11px] font-bold uppercase tracking-wider text-gray-600">
+                  Painel
+                </span>
+              </button>
+
+              {/* Back to Editor Button */}
+              <button
+                onClick={() => setCurrentView('editor')}
+                className="p-1.5 rounded-xl text-[#3A6351] hover:bg-[#F4F7F5] transition-colors flex items-center gap-1.5 cursor-pointer"
+                title="Editar apresentação no editor visual"
+              >
+                <Edit3 className="w-4 h-4" />
+                <span className="hidden md:inline text-[11px] font-bold uppercase tracking-wider">
+                  Editar
+                </span>
+              </button>
+
+              <div className="h-4 w-px bg-gray-200 hidden md:block" />
+
               <span className="text-[10px] tracking-[0.2em] font-bold text-gray-400 uppercase font-sans truncate max-w-[120px] sm:max-w-none">
-                ESCOLHENDO MEU FUTURO
+                {activePresentation?.title || 'ESCOLHENDO MEU FUTURO'}
               </span>
-              <div className="hidden sm:block h-1 w-28 md:w-56 bg-gray-100 rounded-full overflow-hidden">
+
+              <div className="hidden sm:block h-1 w-24 md:w-44 bg-gray-100 rounded-full overflow-hidden">
                 <div
                   id="header-progress-bar"
                   className="h-full bg-[#3A6351] transition-all duration-300 rounded-full"
-                  style={{ width: `${((currentSlideIndex + 1) / SLIDES_DATA.length) * 100}%` }}
+                  style={{ width: `${((currentSlideIndex + 1) / totalSlidesCount) * 100}%` }}
                 />
               </div>
             </div>
 
             {/* Header Right Actions: Quick Access on Mobile & Desktop */}
             <div className="flex items-center gap-1.5 sm:gap-3">
-              <button
-                id="header-slides-drawer-btn"
-                onClick={() => setIsDrawerOpen(true)}
-                className="sm:hidden p-2 rounded-xl text-gray-500 hover:text-[#3A6351] hover:bg-[#F4F7F5] transition-colors cursor-pointer"
-                title="Lista de Telas"
-                aria-label="Abrir lista de telas"
-              >
-                <List className="w-4 h-4" />
-              </button>
+              {isNativeKeynote && (
+                <button
+                  id="header-slides-drawer-btn"
+                  onClick={() => setIsDrawerOpen(true)}
+                  className="sm:hidden p-2 rounded-xl text-gray-500 hover:text-[#3A6351] hover:bg-[#F4F7F5] transition-colors cursor-pointer"
+                  title="Lista de Telas"
+                  aria-label="Abrir lista de telas"
+                >
+                  <List className="w-4 h-4" />
+                </button>
+              )}
 
               <button
                 id="header-notes-btn"
@@ -275,18 +494,20 @@ export default function App() {
                 <StickyNote className="w-4 h-4" />
               </button>
 
-              <button
-                id="header-config-btn"
-                onClick={() => setIsConfigOpen(true)}
-                className="sm:hidden p-2 rounded-xl text-gray-500 hover:text-[#3A6351] hover:bg-[#F4F7F5] transition-colors cursor-pointer"
-                title="Ajustes da Palestrante"
-                aria-label="Ajustes e personalização"
-              >
-                <Settings className="w-4 h-4" />
-              </button>
+              {isNativeKeynote && (
+                <button
+                  id="header-config-btn"
+                  onClick={() => setIsConfigOpen(true)}
+                  className="sm:hidden p-2 rounded-xl text-gray-500 hover:text-[#3A6351] hover:bg-[#F4F7F5] transition-colors cursor-pointer"
+                  title="Ajustes da Palestrante"
+                  aria-label="Ajustes e personalização"
+                >
+                  <Settings className="w-4 h-4" />
+                </button>
+              )}
 
               <span className="text-[10px] tracking-[0.15em] font-bold text-gray-400 font-sans uppercase pl-1 sm:pl-0">
-                Tela <span className="text-[#3A6351] font-bold text-xs">{currentSlideIndex + 1}</span> / {SLIDES_DATA.length}
+                Slide <span className="text-[#3A6351] font-bold text-xs">{currentSlideIndex + 1}</span> / {totalSlidesCount}
               </span>
             </div>
           </header>
@@ -297,18 +518,26 @@ export default function App() {
             onTouchEnd={handleTouchEnd}
             className="w-full flex-1 flex items-stretch justify-center relative overflow-hidden"
           >
-            <SlideRenderer
-              slide={currentSlide}
-              config={speakerConfig}
-              onNextSlide={handleNext}
-              onOpenConfig={() => setIsConfigOpen(true)}
-            />
+            {isNativeKeynote && currentNativeSlide ? (
+              <SlideRenderer
+                slide={currentNativeSlide}
+                config={speakerConfig}
+                onNextSlide={handleNext}
+                onOpenConfig={() => setIsConfigOpen(true)}
+              />
+            ) : currentEditorSlide ? (
+              <CustomSlideRenderer slide={currentEditorSlide} />
+            ) : (
+              <div className="flex items-center justify-center text-gray-400">
+                Carregando slide...
+              </div>
+            )}
           </main>
 
           {/* Floating Presentation Bottom Navigation */}
           <NavigationControls
             currentIndex={currentSlideIndex}
-            totalSlides={SLIDES_DATA.length}
+            totalSlides={totalSlidesCount}
             onPrev={handlePrev}
             onNext={handleNext}
             onResetToStart={() => handleGoToSlide(0)}
@@ -324,20 +553,34 @@ export default function App() {
       )}
 
       {/* Slide Index Drawer */}
-      <SlideDrawer
-        slides={SLIDES_DATA}
-        currentSlideIndex={currentSlideIndex}
-        isOpen={isDrawerOpen}
-        onClose={() => setIsDrawerOpen(false)}
-        onSelectSlide={handleGoToSlide}
-      />
+      {isNativeKeynote && (
+        <SlideDrawer
+          slides={SLIDES_DATA}
+          currentSlideIndex={currentSlideIndex}
+          isOpen={isDrawerOpen}
+          onClose={() => setIsDrawerOpen(false)}
+          onSelectSlide={handleGoToSlide}
+        />
+      )}
 
       {/* Speaker Notes Drawer (Discrete side/bottom panel) */}
       <SpeakerNotesDrawer
-        notes={currentSlide.notes}
-        currentSlide={currentSlide.id}
-        totalSlides={SLIDES_DATA.length}
-        slideTitle={currentSlide.title}
+        notes={
+          isNativeKeynote
+            ? currentNativeSlide?.notes
+            : currentEditorSlide?.notes
+            ? {
+                script: currentEditorSlide.notes.script || '',
+                question: currentEditorSlide.notes.question || '',
+                suggestedTime: currentEditorSlide.notes.suggestedTime || '',
+                objective: currentEditorSlide.notes.objective || '',
+                bullets: [],
+              }
+            : undefined
+        }
+        currentSlide={currentSlideIndex + 1}
+        totalSlides={totalSlidesCount}
+        slideTitle={isNativeKeynote ? currentNativeSlide?.title || '' : currentEditorSlide?.title || ''}
         isOpen={isNotesOpen}
         onClose={() => setIsNotesOpen(false)}
         onPrev={handlePrev}
@@ -345,14 +588,16 @@ export default function App() {
       />
 
       {/* Presenter Cockpit Modal (Full dual view with timer & script) */}
-      <PresenterCockpitModal
-        slides={SLIDES_DATA}
-        currentSlideIndex={currentSlideIndex}
-        isOpen={isCockpitOpen}
-        onClose={() => setIsCockpitOpen(false)}
-        onGoToSlide={handleGoToSlide}
-        renderSlideMini={renderSlideMini}
-      />
+      {isNativeKeynote && (
+        <PresenterCockpitModal
+          slides={SLIDES_DATA}
+          currentSlideIndex={currentSlideIndex}
+          isOpen={isCockpitOpen}
+          onClose={() => setIsCockpitOpen(false)}
+          onGoToSlide={handleGoToSlide}
+          renderSlideMini={renderSlideMini}
+        />
+      )}
 
       {/* Speaker Config Modal (Customize name, clinic, photos, etc.) */}
       <ConfigModal
