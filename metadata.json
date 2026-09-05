@@ -1,0 +1,6 @@
+{
+  "name": "Escolhendo Meu Futuro",
+  "description": "Apresentação interativa em formato keynote/TED para jovens de 15 a 17 anos: Da Farmácia ao empreendedorismo na Estética.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
