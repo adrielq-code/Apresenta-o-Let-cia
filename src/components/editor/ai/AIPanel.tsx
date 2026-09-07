@@ -208,7 +208,7 @@ export const AIPanel: React.FC<AIPanelProps> = ({
     <>
       <aside
         id="ai-assistant-panel"
-        className="w-80 sm:w-96 bg-white border-l border-gray-200 flex flex-col h-full shrink-0 shadow-2xl z-40 animate-slideLeft select-none"
+        className="w-full h-full bg-white border-l border-gray-200 flex flex-col shrink-0 shadow-2xl z-40 animate-slideLeft select-none"
       >
         {/* Header */}
         <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-white via-[#F4F7F5]/50 to-white">

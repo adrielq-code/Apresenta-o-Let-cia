@@ -31,6 +31,7 @@ import {
   Upload,
   Lock,
   Unlock,
+  X,
 } from 'lucide-react';
 
 interface Props {
@@ -46,6 +47,7 @@ interface Props {
   onAlignElement: (id: string, alignment: 'left' | 'center-h' | 'right' | 'top' | 'center-v' | 'bottom') => void;
   presentationImages?: string[];
   onSelectElement: (id: string) => void;
+  onCloseMobile?: () => void;
 }
 
 export const PropertiesSidebar: React.FC<Props> = ({
@@ -61,6 +63,7 @@ export const PropertiesSidebar: React.FC<Props> = ({
   onAlignElement,
   presentationImages = [],
   onSelectElement,
+  onCloseMobile,
 }) => {
   const [activeTab, setActiveTab] = useState<'design' | 'layers' | 'notes'>('design');
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -83,9 +86,9 @@ export const PropertiesSidebar: React.FC<Props> = ({
   ];
 
   return (
-    <aside className="w-72 sm:w-80 bg-white border-l border-gray-200 flex flex-col h-full shrink-0 select-none">
+    <aside className="w-full h-full bg-white border-l border-gray-200 flex flex-col shrink-0 select-none">
       {/* 3 Main Tabs: Design | Camadas | Notas */}
-      <div className="flex items-center border-b border-gray-200 p-1.5 bg-gray-50/70">
+      <div className="flex items-center border-b border-gray-200 p-1.5 bg-gray-50/70 gap-1">
         <button
           onClick={() => setActiveTab('design')}
           className={`flex-1 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
@@ -121,6 +124,16 @@ export const PropertiesSidebar: React.FC<Props> = ({
           <StickyNote className="w-3.5 h-3.5" />
           <span>Notas</span>
         </button>
+
+        {onCloseMobile && (
+          <button
+            onClick={onCloseMobile}
+            className="sm:hidden p-1.5 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-gray-700 cursor-pointer shrink-0"
+            title="Fechar painel"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {/* Content Area */}

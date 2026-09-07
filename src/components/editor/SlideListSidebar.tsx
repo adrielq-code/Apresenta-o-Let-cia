@@ -8,6 +8,7 @@ import {
   ChevronDown,
   Layers,
   Sparkles,
+  X,
 } from 'lucide-react';
 
 interface Props {
@@ -20,6 +21,7 @@ interface Props {
   onDeleteSlide: (index: number) => void;
   onMoveSlideUp: (index: number) => void;
   onMoveSlideDown: (index: number) => void;
+  onCloseMobile?: () => void;
 }
 
 export const SlideListSidebar: React.FC<Props> = ({
@@ -32,9 +34,10 @@ export const SlideListSidebar: React.FC<Props> = ({
   onDeleteSlide,
   onMoveSlideUp,
   onMoveSlideDown,
+  onCloseMobile,
 }) => {
   return (
-    <aside className="w-56 sm:w-64 bg-white border-r border-gray-200 flex flex-col h-full shrink-0 select-none">
+    <aside className="w-full sm:w-64 bg-white border-r border-gray-200 flex flex-col h-full shrink-0 select-none">
       {/* Header */}
       <div className="p-3.5 border-b border-gray-100 space-y-2">
         <div className="flex items-center justify-between">
@@ -43,21 +46,33 @@ export const SlideListSidebar: React.FC<Props> = ({
             <span>Slides ({slides.length})</span>
           </div>
 
-          <button
-            onClick={onAddSlide}
-            className="p-1.5 px-2.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
-            title="Adicionar slide em branco"
-          >
-            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-            <span className="text-[10px] uppercase tracking-wider font-sans">Novo</span>
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={onAddSlide}
+              className="p-1.5 px-2.5 rounded-lg bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
+              title="Adicionar slide em branco"
+            >
+              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span className="text-[10px] uppercase tracking-wider font-sans">Novo</span>
+            </button>
+
+            {onCloseMobile && (
+              <button
+                onClick={onCloseMobile}
+                className="sm:hidden p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 cursor-pointer"
+                title="Fechar painel de slides"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
 
         {onOpenCreateWithAI && (
           <button
             id="create-slide-with-ai-btn"
             onClick={onOpenCreateWithAI}
-            className="w-full py-1.5 px-2.5 rounded-xl bg-gradient-to-r from-[#3A6351] to-[#244234] hover:from-[#2e5041] hover:to-[#1a3025] text-white text-[11px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+            className="w-full py-2 sm:py-1.5 px-2.5 rounded-xl bg-gradient-to-r from-[#3A6351] to-[#244234] hover:from-[#2e5041] hover:to-[#1a3025] text-white text-[11px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer active:scale-[0.99]"
             title="Criar novo slide gerado por IA"
           >
             <Sparkles className="w-3 h-3 text-[#E3B04B]" />
@@ -74,7 +89,10 @@ export const SlideListSidebar: React.FC<Props> = ({
           return (
             <div
               key={slide.id}
-              onClick={() => onSelectSlide(idx)}
+              onClick={() => {
+                onSelectSlide(idx);
+                if (onCloseMobile) onCloseMobile();
+              }}
               className={`group p-2.5 rounded-2xl border transition-all cursor-pointer relative ${
                 isActive
                   ? 'border-[#3A6351] bg-[#F4F7F5] shadow-md shadow-[#3A6351]/10 ring-1 ring-[#3A6351]'
@@ -87,7 +105,11 @@ export const SlideListSidebar: React.FC<Props> = ({
                   Slide {idx + 1}
                 </span>
 
-                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div
+                  className={`flex items-center gap-0.5 transition-opacity ${
+                    isActive ? 'opacity-100' : 'opacity-80 sm:opacity-0 sm:group-hover:opacity-100'
+                  }`}
+                >
                   {/* Move Up */}
                   <button
                     disabled={idx === 0}
@@ -95,10 +117,10 @@ export const SlideListSidebar: React.FC<Props> = ({
                       e.stopPropagation();
                       onMoveSlideUp(idx);
                     }}
-                    className="p-1 rounded text-gray-400 hover:text-gray-700 disabled:opacity-20 hover:bg-gray-200/60 transition-colors"
+                    className="p-1 rounded text-gray-400 hover:text-gray-700 disabled:opacity-20 active:bg-gray-200 hover:bg-gray-200/60 transition-colors"
                     title="Mover para cima"
                   >
-                    <ChevronUp className="w-3 h-3" />
+                    <ChevronUp className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
                   </button>
 
                   {/* Move Down */}
@@ -108,10 +130,10 @@ export const SlideListSidebar: React.FC<Props> = ({
                       e.stopPropagation();
                       onMoveSlideDown(idx);
                     }}
-                    className="p-1 rounded text-gray-400 hover:text-gray-700 disabled:opacity-20 hover:bg-gray-200/60 transition-colors"
+                    className="p-1 rounded text-gray-400 hover:text-gray-700 disabled:opacity-20 active:bg-gray-200 hover:bg-gray-200/60 transition-colors"
                     title="Mover para baixo"
                   >
-                    <ChevronDown className="w-3 h-3" />
+                    <ChevronDown className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
                   </button>
 
                   {/* Duplicate */}
@@ -120,10 +142,10 @@ export const SlideListSidebar: React.FC<Props> = ({
                       e.stopPropagation();
                       onDuplicateSlide(idx);
                     }}
-                    className="p-1 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-200/60 transition-colors"
+                    className="p-1 rounded text-gray-400 hover:text-gray-700 active:bg-gray-200 hover:bg-gray-200/60 transition-colors"
                     title="Duplicar slide"
                   >
-                    <Copy className="w-3 h-3" />
+                    <Copy className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
                   </button>
 
                   {/* Delete */}
@@ -133,10 +155,10 @@ export const SlideListSidebar: React.FC<Props> = ({
                       e.stopPropagation();
                       onDeleteSlide(idx);
                     }}
-                    className="p-1 rounded text-gray-400 hover:text-red-600 disabled:opacity-20 hover:bg-red-50 transition-colors"
+                    className="p-1 rounded text-gray-400 hover:text-red-600 disabled:opacity-20 active:bg-red-100 hover:bg-red-50 transition-colors"
                     title="Excluir slide"
                   >
-                    <Trash2 className="w-3 h-3" />
+                    <Trash2 className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
                   </button>
                 </div>
               </div>
@@ -175,7 +197,7 @@ export const SlideListSidebar: React.FC<Props> = ({
         {/* Bottom "+ Adicionar slide" big button */}
         <button
           onClick={onAddSlide}
-          className="w-full py-3 px-4 rounded-2xl border-2 border-dashed border-gray-200 hover:border-[#3A6351] text-gray-400 hover:text-[#3A6351] hover:bg-[#F4F7F5]/50 flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
+          className="w-full py-3 px-4 rounded-2xl border-2 border-dashed border-gray-200 hover:border-[#3A6351] text-gray-400 hover:text-[#3A6351] hover:bg-[#F4F7F5]/50 flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer active:scale-[0.99]"
         >
           <Plus className="w-4 h-4" />
           <span>+ Adicionar slide</span>

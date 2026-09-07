@@ -10,6 +10,12 @@ import {
   Grid,
   Grid3X3,
   Lock,
+  Unlock,
+  Edit2,
+  Copy,
+  Trash2,
+  Sliders,
+  X,
 } from 'lucide-react';
 
 export interface AlignmentGuideV {
@@ -46,6 +52,7 @@ interface Props {
   onDeleteElement: (id: string) => void;
   onDuplicateElement: (id: string) => void;
   onImageDrop?: (imageUrl: string) => void;
+  onOpenPropertiesDrawer?: () => void;
 }
 
 type DragAction = 'move' | 'resize' | 'rotate' | null;
@@ -61,8 +68,37 @@ export const EditorCanvas: React.FC<Props> = ({
   onDeleteElement,
   onDuplicateElement,
   onImageDrop,
+  onOpenPropertiesDrawer,
 }) => {
   const canvasRef = useRef<HTMLDivElement>(null);
+  const [canvasWidth, setCanvasWidth] = useState<number>(1000);
+
+  // Measure canvas width for proportional typography scaling across devices
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    const updateSize = () => {
+      if (canvasRef.current) {
+        setCanvasWidth(canvasRef.current.clientWidth || 1000);
+      }
+    };
+    updateSize();
+
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.contentRect.width > 0) {
+          setCanvasWidth(entry.contentRect.width);
+        }
+      }
+    });
+    ro.observe(canvasRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  const fontScale = canvasWidth > 0 ? canvasWidth / 1000 : 1;
+  const scaledFontSize = (size?: number, fallback = 16) => {
+    const base = size || fallback;
+    return Math.max(9, Math.round(base * fontScale));
+  };
 
   // Dragging & Resizing interaction state
   const [activeAction, setActiveAction] = useState<DragAction>(null);
@@ -777,14 +813,14 @@ export const EditorCanvas: React.FC<Props> = ({
               className="w-full h-full p-0 bg-transparent border-none resize-none focus:outline-none focus:ring-1 focus:ring-[#3A6351]/40"
               style={{
                 fontFamily: el.style.fontFamily === 'serif' ? 'Playfair Display, serif' : 'Montserrat, sans-serif',
-                fontSize: `${el.style.fontSize || 16}px`,
+                fontSize: `${scaledFontSize(el.style.fontSize, 16)}px`,
                 fontWeight: el.style.fontWeight || 'normal',
                 fontStyle: el.style.fontStyle || 'normal',
                 textDecoration: el.style.textDecoration || 'none',
                 color: el.style.color || '#2C2C2C',
                 textAlign: el.style.textAlign || 'left',
                 lineHeight: el.style.lineHeight || 1.3,
-                letterSpacing: el.style.letterSpacing ? `${el.style.letterSpacing}px` : undefined,
+                letterSpacing: el.style.letterSpacing ? `${el.style.letterSpacing * fontScale}px` : undefined,
                 textTransform: el.style.textTransform || 'none',
               }}
             />
@@ -800,14 +836,14 @@ export const EditorCanvas: React.FC<Props> = ({
             className="w-full h-full whitespace-pre-wrap select-none overflow-hidden"
             style={{
               fontFamily: el.style.fontFamily === 'serif' ? 'Playfair Display, serif' : 'Montserrat, sans-serif',
-              fontSize: `${el.style.fontSize || 16}px`,
+              fontSize: `${scaledFontSize(el.style.fontSize, 16)}px`,
               fontWeight: el.style.fontWeight || 'normal',
               fontStyle: el.style.fontStyle || 'normal',
               textDecoration: el.style.textDecoration || 'none',
               color: el.style.color || '#2C2C2C',
               textAlign: el.style.textAlign || 'left',
               lineHeight: el.style.lineHeight || 1.3,
-              letterSpacing: el.style.letterSpacing ? `${el.style.letterSpacing}px` : undefined,
+              letterSpacing: el.style.letterSpacing ? `${el.style.letterSpacing * fontScale}px` : undefined,
               textTransform: el.style.textTransform || 'none',
             }}
           >
@@ -823,7 +859,7 @@ export const EditorCanvas: React.FC<Props> = ({
             className="w-full h-full pointer-events-none select-none"
             style={{
               objectFit: el.style.objectFit || 'cover',
-              borderRadius: el.style.borderRadius ? `${el.style.borderRadius}px` : '0px',
+              borderRadius: el.style.borderRadius ? `${el.style.borderRadius * fontScale}px` : '0px',
               borderWidth: el.style.borderWidth ? `${el.style.borderWidth}px` : '0px',
               borderColor: el.style.borderColor || 'transparent',
               boxShadow: el.style.shadow ? '0 10px 25px -5px rgba(0, 0, 0, 0.1)' : 'none',
@@ -854,7 +890,7 @@ export const EditorCanvas: React.FC<Props> = ({
                 style={{
                   height: el.style.borderWidth ? `${el.style.borderWidth}px` : '3px',
                   backgroundColor: el.style.backgroundColor || '#3A6351',
-                  borderRadius: el.style.borderRadius ? `${el.style.borderRadius}px` : '2px',
+                  borderRadius: el.style.borderRadius ? `${el.style.borderRadius * fontScale}px` : '2px',
                 }}
               />
             </div>
@@ -865,7 +901,7 @@ export const EditorCanvas: React.FC<Props> = ({
             className="w-full h-full"
             style={{
               backgroundColor: el.style.backgroundColor || '#F4F7F5',
-              borderRadius: el.style.borderRadius !== undefined ? `${el.style.borderRadius}px` : '16px',
+              borderRadius: el.style.borderRadius !== undefined ? `${el.style.borderRadius * fontScale}px` : '16px',
               borderColor: el.style.borderColor || 'transparent',
               borderWidth: el.style.borderWidth ? `${el.style.borderWidth}px` : '0px',
             }}
@@ -878,14 +914,17 @@ export const EditorCanvas: React.FC<Props> = ({
             <span
               className="font-bold font-serif leading-none tracking-tight"
               style={{
-                fontSize: `${el.style.fontSize || 56}px`,
+                fontSize: `${scaledFontSize(el.style.fontSize, 56)}px`,
                 color: el.style.color || '#3A6351',
               }}
             >
               {el.content}
             </span>
             {el.secondaryContent && (
-              <p className="text-xs text-gray-500 font-sans mt-2 max-w-[85%] leading-snug">
+              <p
+                className="text-gray-500 font-sans mt-2 max-w-[85%] leading-snug"
+                style={{ fontSize: `${scaledFontSize(12, 12)}px` }}
+              >
                 {el.secondaryContent}
               </p>
             )}
@@ -898,14 +937,17 @@ export const EditorCanvas: React.FC<Props> = ({
             <p
               className="font-serif italic leading-relaxed"
               style={{
-                fontSize: `${el.style.fontSize || 28}px`,
+                fontSize: `${scaledFontSize(el.style.fontSize, 28)}px`,
                 color: el.style.color || '#2C2C2C',
               }}
             >
               {el.content}
             </p>
             {el.secondaryContent && (
-              <span className="text-xs uppercase tracking-widest text-[#3A6351] font-bold font-sans mt-3">
+              <span
+                className="uppercase tracking-widest text-[#3A6351] font-bold font-sans mt-3"
+                style={{ fontSize: `${scaledFontSize(11, 11)}px` }}
+              >
                 {el.secondaryContent}
               </span>
             )}
@@ -919,9 +961,10 @@ export const EditorCanvas: React.FC<Props> = ({
 
   return (
     <div
-      className="flex-1 bg-gray-100 flex items-center justify-center p-4 sm:p-8 overflow-hidden relative select-none"
+      className="flex-1 bg-gray-100 flex items-center justify-center p-2 sm:p-8 overflow-hidden relative select-none touch-none"
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
       onClick={() => onSelectElement(null)}
@@ -930,7 +973,7 @@ export const EditorCanvas: React.FC<Props> = ({
       <div
         ref={canvasRef}
         id="slide-canvas-viewport"
-        className="w-full max-w-5xl aspect-video bg-white rounded-2xl shadow-2xl relative overflow-hidden transition-all"
+        className="w-full max-w-5xl aspect-video bg-white rounded-xl sm:rounded-2xl shadow-xl sm:shadow-2xl relative overflow-hidden transition-all touch-none"
         style={{
           backgroundColor: slide.background?.value?.startsWith('#') || slide.background?.value?.startsWith('rgb')
             ? slide.background.value
@@ -946,10 +989,10 @@ export const EditorCanvas: React.FC<Props> = ({
       >
         {/* If Native Slide from Original Keynote, show decorative preview tag */}
         {slide.nativeSlideId && (
-          <div className="absolute top-4 right-4 z-10 bg-white/90 backdrop-blur-xs border border-[#3A6351]/30 rounded-full px-3 py-1 flex items-center gap-1.5 shadow-sm">
-            <Sparkles className="w-3 h-3 text-[#3A6351]" />
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[#3A6351]">
-              Slide da Palestra Interativa #{slide.nativeSlideId}
+          <div className="absolute top-2 right-2 sm:top-4 sm:right-4 z-10 bg-white/90 backdrop-blur-xs border border-[#3A6351]/30 rounded-full px-2 py-0.5 sm:px-3 sm:py-1 flex items-center gap-1 sm:gap-1.5 shadow-sm">
+            <Sparkles className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-[#3A6351]" />
+            <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-[#3A6351]">
+              Slide #{slide.nativeSlideId}
             </span>
           </div>
         )}
@@ -1006,7 +1049,7 @@ export const EditorCanvas: React.FC<Props> = ({
               key={el.id}
               id={`elem-${el.id}`}
               onPointerDown={(e) => handleElementPointerDown(e, el)}
-              className={`absolute transition-shadow ${
+              className={`absolute transition-shadow touch-none ${
                 el.locked ? 'cursor-default' : 'cursor-move'
               } ${
                 isSelected
@@ -1031,7 +1074,7 @@ export const EditorCanvas: React.FC<Props> = ({
               {/* Lock Badge if Locked */}
               {el.locked && (
                 <div
-                  className="absolute -top-2 -right-2 z-50 bg-amber-500 text-white p-0.5 rounded-full shadow-xs pointer-events-none"
+                  className="absolute -top-2 -right-2 z-50 bg-amber-500 text-white p-1 rounded-full shadow-xs pointer-events-none"
                   title="Elemento bloqueado (protegido contra edições da IA e fixo no canvas)"
                 >
                   <Lock className="w-2.5 h-2.5 stroke-[2.5]" />
@@ -1041,51 +1084,51 @@ export const EditorCanvas: React.FC<Props> = ({
               {/* Selection Handles (Visible only when selected and NOT locked) */}
               {isSelected && !el.locked && (
                 <>
-                  {/* Rotation handle above top center */}
+                  {/* Rotation handle above top center with touch-safe area */}
                   <div
                     onPointerDown={handleRotatePointerDown}
-                    className="absolute -top-6 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-white border-2 border-[#3A6351] flex items-center justify-center cursor-grab active:cursor-grabbing shadow-sm z-50 hover:scale-125 transition-transform"
+                    className="absolute -top-7 sm:-top-6 left-1/2 -translate-x-1/2 w-6 h-6 sm:w-4 sm:h-4 rounded-full bg-white border-2 border-[#3A6351] flex items-center justify-center cursor-grab active:cursor-grabbing shadow-sm z-50 hover:scale-125 transition-transform touch-none"
                     title="Rotacionar elemento"
                   >
-                    <div className="w-1 h-1 bg-[#3A6351] rounded-full" />
+                    <div className="w-1.5 h-1.5 sm:w-1 sm:h-1 bg-[#3A6351] rounded-full pointer-events-none" />
                   </div>
                   {/* Stem line connecting rotation handle */}
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-0.5 h-3 bg-[#3A6351]" />
+                  <div className="absolute -top-3.5 sm:-top-3 left-1/2 -translate-x-1/2 w-0.5 h-3.5 sm:h-3 bg-[#3A6351] pointer-events-none" />
 
-                  {/* 4 Corner Handles */}
+                  {/* 4 Corner Handles with enlarged touch targets for mobile */}
                   <div
                     onPointerDown={(e) => handleResizePointerDown(e, 'tl')}
-                    className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-[#3A6351] rounded-sm cursor-nwse-resize shadow-xs z-50"
+                    className="absolute -top-2.5 -left-2.5 sm:-top-1.5 sm:-left-1.5 w-5 h-5 sm:w-3 sm:h-3 bg-white border-2 border-[#3A6351] rounded-sm cursor-nwse-resize shadow-xs z-50 touch-none flex items-center justify-center"
                   />
                   <div
                     onPointerDown={(e) => handleResizePointerDown(e, 'tr')}
-                    className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-[#3A6351] rounded-sm cursor-nesw-resize shadow-xs z-50"
+                    className="absolute -top-2.5 -right-2.5 sm:-top-1.5 sm:-right-1.5 w-5 h-5 sm:w-3 sm:h-3 bg-white border-2 border-[#3A6351] rounded-sm cursor-nesw-resize shadow-xs z-50 touch-none flex items-center justify-center"
                   />
                   <div
                     onPointerDown={(e) => handleResizePointerDown(e, 'bl')}
-                    className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-[#3A6351] rounded-sm cursor-nesw-resize shadow-xs z-50"
+                    className="absolute -bottom-2.5 -left-2.5 sm:-bottom-1.5 sm:-left-1.5 w-5 h-5 sm:w-3 sm:h-3 bg-white border-2 border-[#3A6351] rounded-sm cursor-nesw-resize shadow-xs z-50 touch-none flex items-center justify-center"
                   />
                   <div
                     onPointerDown={(e) => handleResizePointerDown(e, 'br')}
-                    className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-[#3A6351] rounded-sm cursor-nwse-resize shadow-xs z-50"
+                    className="absolute -bottom-2.5 -right-2.5 sm:-bottom-1.5 sm:-right-1.5 w-5 h-5 sm:w-3 sm:h-3 bg-white border-2 border-[#3A6351] rounded-sm cursor-nwse-resize shadow-xs z-50 touch-none flex items-center justify-center"
                   />
 
                   {/* 4 Edge Handles */}
                   <div
                     onPointerDown={(e) => handleResizePointerDown(e, 't')}
-                    className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-2 bg-white border border-[#3A6351] rounded-xs cursor-ns-resize shadow-xs z-50"
+                    className="absolute -top-2 sm:-top-1.5 left-1/2 -translate-x-1/2 w-5 h-3 sm:w-3 sm:h-2 bg-white border border-[#3A6351] rounded-xs cursor-ns-resize shadow-xs z-50 touch-none"
                   />
                   <div
                     onPointerDown={(e) => handleResizePointerDown(e, 'b')}
-                    className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-2 bg-white border border-[#3A6351] rounded-xs cursor-ns-resize shadow-xs z-50"
+                    className="absolute -bottom-2 sm:-bottom-1.5 left-1/2 -translate-x-1/2 w-5 h-3 sm:w-3 sm:h-2 bg-white border border-[#3A6351] rounded-xs cursor-ns-resize shadow-xs z-50 touch-none"
                   />
                   <div
                     onPointerDown={(e) => handleResizePointerDown(e, 'l')}
-                    className="absolute top-1/2 -left-1.5 -translate-y-1/2 w-2 h-3 bg-white border border-[#3A6351] rounded-xs cursor-ew-resize shadow-xs z-50"
+                    className="absolute top-1/2 -left-2 sm:-left-1.5 -translate-y-1/2 w-3 h-5 sm:w-2 sm:h-3 bg-white border border-[#3A6351] rounded-xs cursor-ew-resize shadow-xs z-50 touch-none"
                   />
                   <div
                     onPointerDown={(e) => handleResizePointerDown(e, 'r')}
-                    className="absolute top-1/2 -right-1.5 -translate-y-1/2 w-2 h-3 bg-white border border-[#3A6351] rounded-xs cursor-ew-resize shadow-xs z-50"
+                    className="absolute top-1/2 -right-2 sm:-right-1.5 -translate-y-1/2 w-3 h-5 sm:w-2 sm:h-3 bg-white border border-[#3A6351] rounded-xs cursor-ew-resize shadow-xs z-50 touch-none"
                   />
                 </>
               )}
@@ -1094,9 +1137,82 @@ export const EditorCanvas: React.FC<Props> = ({
         })}
       </div>
 
-      {/* Precision Snapping & Grid Floating Controls */}
+      {/* Floating Mobile Element Quick Action Bar */}
+      {selectedElement && (
+        <div
+          className="sm:hidden absolute top-3 left-1/2 -translate-x-1/2 z-50 bg-white/95 backdrop-blur-md border border-gray-200/90 rounded-2xl px-2.5 py-1.5 shadow-xl flex items-center gap-1 text-xs select-none max-w-[95vw] overflow-x-auto touch-auto"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {selectedElement.type === 'text' && (
+            <button
+              type="button"
+              onClick={() => {
+                initialTextRef.current = selectedElement.content;
+                setEditingTextId(selectedElement.id);
+              }}
+              className="px-2.5 py-1.5 rounded-xl bg-gray-100 active:bg-gray-200 text-gray-800 text-[11px] font-bold flex items-center gap-1 cursor-pointer whitespace-nowrap"
+            >
+              <Edit2 className="w-3.5 h-3.5 text-[#3A6351]" />
+              <span>Editar Texto</span>
+            </button>
+          )}
+
+          {onOpenPropertiesDrawer && (
+            <button
+              type="button"
+              onClick={onOpenPropertiesDrawer}
+              className="px-2.5 py-1.5 rounded-xl bg-[#3A6351]/10 active:bg-[#3A6351]/20 text-[#3A6351] text-[11px] font-bold flex items-center gap-1 cursor-pointer whitespace-nowrap"
+            >
+              <Sliders className="w-3.5 h-3.5" />
+              <span>Design</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => onDuplicateElement(selectedElement.id)}
+            className="p-1.5 rounded-xl active:bg-gray-100 text-gray-600 hover:text-gray-900 cursor-pointer"
+            title="Duplicar"
+          >
+            <Copy className="w-4 h-4" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onUpdateElement(selectedElement.id, { locked: !selectedElement.locked })}
+            className={`p-1.5 rounded-xl cursor-pointer ${
+              selectedElement.locked
+                ? 'bg-amber-100 text-amber-700'
+                : 'active:bg-gray-100 text-gray-600'
+            }`}
+            title={selectedElement.locked ? 'Desbloquear elemento' : 'Bloquear elemento'}
+          >
+            {selectedElement.locked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onDeleteElement(selectedElement.id)}
+            className="p-1.5 rounded-xl active:bg-red-50 text-red-500 cursor-pointer"
+            title="Excluir"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onSelectElement(null)}
+            className="p-1.5 rounded-xl active:bg-gray-100 text-gray-400 hover:text-gray-700 cursor-pointer"
+            title="Desmarcar"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Precision Snapping & Grid Floating Controls (Desktop/Tablet) */}
       <div
-        className="absolute bottom-4 left-4 z-40 bg-white/95 backdrop-blur-md border border-gray-200/90 rounded-xl px-2.5 py-1.5 shadow-md flex items-center gap-1.5 text-xs select-none"
+        className="hidden sm:flex absolute bottom-4 left-4 z-40 bg-white/95 backdrop-blur-md border border-gray-200/90 rounded-xl px-2.5 py-1.5 shadow-md items-center gap-1.5 text-xs select-none"
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -1147,8 +1263,8 @@ export const EditorCanvas: React.FC<Props> = ({
 
         {selectedElement && (
           <>
-            <div className="w-px h-4 bg-gray-200 hidden sm:block" />
-            <div className="hidden sm:flex items-center gap-2 text-[11px] text-gray-500 font-mono px-2">
+            <div className="w-px h-4 bg-gray-200" />
+            <div className="flex items-center gap-2 text-[11px] text-gray-500 font-mono px-2">
               <span>X: {Math.round(selectedElement.x)}%</span>
               <span>Y: {Math.round(selectedElement.y)}%</span>
               <span>({Math.round(selectedElement.width)}% × {Math.round(selectedElement.height)}%)</span>

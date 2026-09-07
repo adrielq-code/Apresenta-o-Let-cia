@@ -35,7 +35,16 @@ import {
   ElementRect,
   TransformType,
 } from '../../services/command';
-import { Undo2, Redo2 } from 'lucide-react';
+import {
+  Undo2,
+  Redo2,
+  Layers,
+  Palette,
+  Sparkles,
+  ChevronLeft,
+  ChevronRight,
+  X,
+} from 'lucide-react';
 import { AIPanel } from './ai/AIPanel';
 import { AICreateSlideModal } from './ai/AICreateSlideModal';
 import { VisualIdentity } from '../../types';
@@ -62,6 +71,9 @@ export const VisualEditor: React.FC<VisualEditorProps> = ({
   const [isAIPanelOpen, setIsAIPanelOpen] = useState<boolean>(false);
   const [isCreateSlideModalOpen, setIsCreateSlideModalOpen] = useState<boolean>(false);
   const [isCreatingSlideWithAI, setIsCreatingSlideWithAI] = useState<boolean>(false);
+
+  // Mobile Drawer State ('slides' | 'properties' | null)
+  const [mobileDrawer, setMobileDrawer] = useState<'slides' | 'properties' | null>(null);
 
   // Autosave status & timer
   const [autosaveStatus, setAutosaveStatus] = useState<'saving' | 'saved' | 'idle'>('saved');
@@ -950,8 +962,8 @@ export const VisualEditor: React.FC<VisualEditorProps> = ({
       />
 
       {/* Quick Add Elements Sub-header */}
-      <div className="w-full h-12 bg-white/90 border-b border-gray-200 px-6 flex items-center justify-between shrink-0 z-20">
-        <div className="flex items-center gap-3">
+      <div className="w-full h-11 sm:h-12 bg-white/90 border-b border-gray-200 px-3 sm:px-6 flex items-center justify-between shrink-0 z-20">
+        <div className="flex items-center gap-2 sm:gap-3">
           <AddElementDropdown
             onAddText={handleAddText}
             onAddImage={handleAddImage}
@@ -960,8 +972,44 @@ export const VisualEditor: React.FC<VisualEditorProps> = ({
             onAddQuote={handleAddQuote}
             presentationImages={presentationImages}
           />
-          <span className="text-xs text-gray-400 font-sans hidden sm:inline">
-            Slide {activeSlideIndex + 1} de {currentPres.slides.length}: “{activeSlide.title || 'Slide sem título'}”
+
+          {/* Slide Switcher for Mobile / Title info for Desktop */}
+          <div className="flex items-center gap-1 sm:gap-2">
+            <button
+              onClick={() => {
+                if (activeSlideIndex > 0) {
+                  setActiveSlideIndex(activeSlideIndex - 1);
+                  setSelectedElementId(null);
+                }
+              }}
+              disabled={activeSlideIndex === 0}
+              className="p-1 rounded-lg hover:bg-gray-100 disabled:opacity-20 text-gray-600 transition-colors cursor-pointer"
+              title="Slide anterior"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
+            <span className="text-xs font-bold text-gray-700 font-mono whitespace-nowrap">
+              {activeSlideIndex + 1} / {currentPres.slides.length}
+            </span>
+
+            <button
+              onClick={() => {
+                if (activeSlideIndex < currentPres.slides.length - 1) {
+                  setActiveSlideIndex(activeSlideIndex + 1);
+                  setSelectedElementId(null);
+                }
+              }}
+              disabled={activeSlideIndex === currentPres.slides.length - 1}
+              className="p-1 rounded-lg hover:bg-gray-100 disabled:opacity-20 text-gray-600 transition-colors cursor-pointer"
+              title="Próximo slide"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          <span className="text-xs text-gray-400 font-sans hidden md:inline truncate max-w-xs">
+            “{activeSlide.title || 'Slide sem título'}”
           </span>
         </div>
 
@@ -972,23 +1020,25 @@ export const VisualEditor: React.FC<VisualEditorProps> = ({
         </div>
       </div>
 
-      {/* Main Workspace (Left Sidebar + Center Canvas + Right Inspector or AI Assistant Panel) */}
+      {/* Main Workspace (Left Sidebar on Desktop + Center Canvas + Right Inspector/AI on Desktop) */}
       <div className="flex-1 flex overflow-hidden relative">
-        {/* Left Thumbnails List */}
-        <SlideListSidebar
-          slides={currentPres.slides}
-          activeSlideIndex={activeSlideIndex}
-          onSelectSlide={(idx) => {
-            setActiveSlideIndex(idx);
-            setSelectedElementId(null);
-          }}
-          onAddSlide={handleAddSlide}
-          onOpenCreateWithAI={() => setIsCreateSlideModalOpen(true)}
-          onDuplicateSlide={handleDuplicateSlide}
-          onDeleteSlide={handleDeleteSlide}
-          onMoveSlideUp={handleMoveSlideUp}
-          onMoveSlideDown={handleMoveSlideDown}
-        />
+        {/* Left Thumbnails List (Desktop) */}
+        <div className="hidden lg:flex shrink-0 h-full">
+          <SlideListSidebar
+            slides={currentPres.slides}
+            activeSlideIndex={activeSlideIndex}
+            onSelectSlide={(idx) => {
+              setActiveSlideIndex(idx);
+              setSelectedElementId(null);
+            }}
+            onAddSlide={handleAddSlide}
+            onOpenCreateWithAI={() => setIsCreateSlideModalOpen(true)}
+            onDuplicateSlide={handleDuplicateSlide}
+            onDeleteSlide={handleDeleteSlide}
+            onMoveSlideUp={handleMoveSlideUp}
+            onMoveSlideDown={handleMoveSlideDown}
+          />
+        </div>
 
         {/* Center Interactive Canvas with Command Commits */}
         <EditorCanvas
@@ -1002,44 +1052,182 @@ export const VisualEditor: React.FC<VisualEditorProps> = ({
           onDeleteElement={handleDeleteElement}
           onDuplicateElement={handleDuplicateElement}
           onImageDrop={handleAddImage}
+          onOpenPropertiesDrawer={() => setMobileDrawer('properties')}
         />
 
-        {/* AI Assistant Side Panel (if open) */}
-        {isAIPanelOpen ? (
-          <AIPanel
-            isOpen={isAIPanelOpen}
-            onClose={() => setIsAIPanelOpen(false)}
-            slide={activeSlide}
-            slideIndex={activeSlideIndex}
-            presentation={currentPres}
-            onApplySlideEdit={handleApplySlideEdit}
-            onAddNewSlide={handleAddNewSlide}
-            onUndoLastAction={() => commandManagerRef.current.undo()}
-            canUndo={canUndo}
-            onGoToSlide={(idx) => {
-              setActiveSlideIndex(idx);
-              setSelectedElementId(null);
-            }}
-            onApplyIdentityToAll={handleApplyIdentityToAll}
-          />
-        ) : (
-          /* Right Inspector / Properties Sidebar */
-          <PropertiesSidebar
-            slide={activeSlide}
-            selectedElement={selectedElement}
-            onUpdateElement={handleUpdateElementProperties}
-            onUpdateSlideBackground={handleUpdateSlideBackground}
-            onUpdateSlideNotes={handleUpdateSlideNotes}
-            onDuplicateElement={handleDuplicateElement}
-            onDeleteElement={handleDeleteElement}
-            onBringForward={handleBringForward}
-            onSendBackward={handleSendBackward}
-            onAlignElement={handleAlignElement}
-            presentationImages={presentationImages}
-            onSelectElement={setSelectedElementId}
-          />
-        )}
+        {/* Right Desktop Inspector / AI Assistant Panel */}
+        <div className="hidden lg:flex shrink-0 h-full">
+          {isAIPanelOpen ? (
+            <div className="w-80 sm:w-96 h-full">
+              <AIPanel
+                isOpen={isAIPanelOpen}
+                onClose={() => setIsAIPanelOpen(false)}
+                slide={activeSlide}
+                slideIndex={activeSlideIndex}
+                presentation={currentPres}
+                onApplySlideEdit={handleApplySlideEdit}
+                onAddNewSlide={handleAddNewSlide}
+                onUndoLastAction={() => commandManagerRef.current.undo()}
+                canUndo={canUndo}
+                onGoToSlide={(idx) => {
+                  setActiveSlideIndex(idx);
+                  setSelectedElementId(null);
+                }}
+                onApplyIdentityToAll={handleApplyIdentityToAll}
+              />
+            </div>
+          ) : (
+            <div className="w-72 sm:w-80 h-full">
+              <PropertiesSidebar
+                slide={activeSlide}
+                selectedElement={selectedElement}
+                onUpdateElement={handleUpdateElementProperties}
+                onUpdateSlideBackground={handleUpdateSlideBackground}
+                onUpdateSlideNotes={handleUpdateSlideNotes}
+                onDuplicateElement={handleDuplicateElement}
+                onDeleteElement={handleDeleteElement}
+                onBringForward={handleBringForward}
+                onSendBackward={handleSendBackward}
+                onAlignElement={handleAlignElement}
+                presentationImages={presentationImages}
+                onSelectElement={setSelectedElementId}
+              />
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Mobile Bottom Dock (Navigation Bar for Screens < lg) */}
+      <nav className="lg:hidden h-14 bg-white border-t border-gray-200 px-3 flex items-center justify-around shrink-0 z-30 select-none shadow-lg">
+        <button
+          onClick={() => setMobileDrawer((prev) => (prev === 'slides' ? null : 'slides'))}
+          className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1 rounded-xl transition-all cursor-pointer ${
+            mobileDrawer === 'slides'
+              ? 'text-[#3A6351] font-bold bg-[#3A6351]/10'
+              : 'text-gray-500 hover:text-gray-900 active:bg-gray-100'
+          }`}
+        >
+          <Layers className="w-4 h-4" />
+          <span className="text-[10px] font-sans">Slides ({currentPres.slides.length})</span>
+        </button>
+
+        <button
+          onClick={() => setMobileDrawer((prev) => (prev === 'properties' ? null : 'properties'))}
+          className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1 rounded-xl transition-all cursor-pointer relative ${
+            mobileDrawer === 'properties'
+              ? 'text-[#3A6351] font-bold bg-[#3A6351]/10'
+              : selectedElement
+              ? 'text-gray-800 font-medium'
+              : 'text-gray-500 hover:text-gray-900 active:bg-gray-100'
+          }`}
+        >
+          {selectedElement && (
+            <span className="absolute top-1 right-2 w-2 h-2 rounded-full bg-[#3A6351] ring-2 ring-white" />
+          )}
+          <Palette className="w-4 h-4" />
+          <span className="text-[10px] font-sans">Design</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setIsAIPanelOpen(true);
+            setMobileDrawer(null);
+          }}
+          className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1 rounded-xl transition-all cursor-pointer ${
+            isAIPanelOpen
+              ? 'text-[#3A6351] font-bold bg-[#3A6351]/10'
+              : 'text-gray-600 hover:text-gray-900 active:bg-gray-100'
+          }`}
+        >
+          <Sparkles className="w-4 h-4 text-[#E3B04B]" />
+          <span className="text-[10px] font-sans font-bold">✨ IA</span>
+        </button>
+      </nav>
+
+      {/* Mobile Slides Drawer Modal */}
+      {mobileDrawer === 'slides' && (
+        <div className="lg:hidden fixed inset-0 z-50 flex">
+          <div
+            className="fixed inset-0 bg-black/40 backdrop-blur-xs animate-fadeIn"
+            onClick={() => setMobileDrawer(null)}
+          />
+          <div className="relative w-72 max-w-[85vw] h-full bg-white shadow-2xl z-10 animate-slideRight">
+            <SlideListSidebar
+              slides={currentPres.slides}
+              activeSlideIndex={activeSlideIndex}
+              onSelectSlide={(idx) => {
+                setActiveSlideIndex(idx);
+                setSelectedElementId(null);
+              }}
+              onAddSlide={handleAddSlide}
+              onOpenCreateWithAI={() => {
+                setIsCreateSlideModalOpen(true);
+                setMobileDrawer(null);
+              }}
+              onDuplicateSlide={handleDuplicateSlide}
+              onDeleteSlide={handleDeleteSlide}
+              onMoveSlideUp={handleMoveSlideUp}
+              onMoveSlideDown={handleMoveSlideDown}
+              onCloseMobile={() => setMobileDrawer(null)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Properties / Design Drawer Modal */}
+      {mobileDrawer === 'properties' && (
+        <div className="lg:hidden fixed inset-0 z-50 flex justify-end">
+          <div
+            className="fixed inset-0 bg-black/40 backdrop-blur-xs animate-fadeIn"
+            onClick={() => setMobileDrawer(null)}
+          />
+          <div className="relative w-80 max-w-[90vw] h-full bg-white shadow-2xl z-10 animate-slideLeft">
+            <PropertiesSidebar
+              slide={activeSlide}
+              selectedElement={selectedElement}
+              onUpdateElement={handleUpdateElementProperties}
+              onUpdateSlideBackground={handleUpdateSlideBackground}
+              onUpdateSlideNotes={handleUpdateSlideNotes}
+              onDuplicateElement={handleDuplicateElement}
+              onDeleteElement={handleDeleteElement}
+              onBringForward={handleBringForward}
+              onSendBackward={handleSendBackward}
+              onAlignElement={handleAlignElement}
+              presentationImages={presentationImages}
+              onSelectElement={setSelectedElementId}
+              onCloseMobile={() => setMobileDrawer(null)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Mobile AI Panel Drawer Modal */}
+      {isAIPanelOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 flex justify-end">
+          <div
+            className="fixed inset-0 bg-black/40 backdrop-blur-xs animate-fadeIn"
+            onClick={() => setIsAIPanelOpen(false)}
+          />
+          <div className="relative w-full max-w-md h-full bg-white shadow-2xl z-10 animate-slideLeft">
+            <AIPanel
+              isOpen={isAIPanelOpen}
+              onClose={() => setIsAIPanelOpen(false)}
+              slide={activeSlide}
+              slideIndex={activeSlideIndex}
+              presentation={currentPres}
+              onApplySlideEdit={handleApplySlideEdit}
+              onAddNewSlide={handleAddNewSlide}
+              onUndoLastAction={() => commandManagerRef.current.undo()}
+              canUndo={canUndo}
+              onGoToSlide={(idx) => {
+                setActiveSlideIndex(idx);
+                setSelectedElementId(null);
+              }}
+              onApplyIdentityToAll={handleApplyIdentityToAll}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Visual Feedback Toast for Undo / Redo */}
       {feedbackToast && (
